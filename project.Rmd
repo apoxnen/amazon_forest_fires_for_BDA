@@ -1,0 +1,90 @@
+---
+title: "BDA - Project"
+author: "Anonymous"
+output: 
+  pdf_document: 
+    toc: yes
+    toc_depth: 1
+    keep_tex: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+options(tinytex.verbose = TRUE)
+```
+
+```{r, echo=FALSE}
+library(aaltobda)
+library (mvtnorm)
+
+library("rstan")
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
+
+```
+
+
+```{r, echo=TRUE, tidy=FALSE}
+library(aaltobda)
+library (mvtnorm)
+
+library("rstan")
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
+library("ggplot2")
+library("bayesplot")
+theme_set(bayesplot::theme_default(base_family = "sans"))
+library(loo)
+
+```
+
+
+## Work on 1998, Acre
+```{r, echo=TRUE, tidy=FALSE}
+summary(data_1998_Acre)
+plot(1:12, data_1998_Acre$number)
+# https://mc-stan.org/docs/2_18/functions-reference/poisson.html
+#http://avehtari.github.io/BDA_R_demos/demos_rstan/ppc/poisson-ppc.html#2_fit_basic_poisson_model
+
+qplot(data_1998_Acre$number)
+```
+
+```{r, echo=TRUE, tidy=FALSE}
+model1= "
+
+data {
+  int<lower=1> N;
+  int<lower=0> y[N];
+}
+parameters {
+  real<lower=0> lambda;
+}
+model {
+  lambda ~ exponential(0.2);
+  y ~ poisson(lambda);
+}
+generated quantities {
+  real log_lik[N];
+  int y_rep[N];
+  for (n in 1:N) {
+    y_rep[n] = poisson_rng(lambda);
+    log_lik[n] = poisson_lpmf(y[n] | lambda);
+  }
+}
+
+"
+
+data=list(length(data_1998_Acre$year), data_1998_Acre$number)
+
+fit1 <- stan(model_code=model1, data = data)
+print(fit1)
+
+
+
+```
+
