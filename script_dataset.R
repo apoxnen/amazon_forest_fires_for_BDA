@@ -1,7 +1,7 @@
 # FIX THE DATASET
 
 library(readr)
-amazon <- read_csv("project work/amazon.csv")
+amazon <- read_csv("Aalto/amazon_forest_fires_for_BDA/amazon.csv")
 #View(amazon)
 
 #levels(factor(amazon$state))

@@ -16,17 +16,6 @@ knitr::opts_chunk$set(echo = TRUE)
 options(tinytex.verbose = TRUE)
 ```
 
-```{r, echo=FALSE}
-library(aaltobda)
-library (mvtnorm)
-
-library("rstan")
-options(mc.cores = parallel::detectCores())
-rstan_options(auto_write = TRUE)
-Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
-
-```
-
 
 ```{r, echo=TRUE, tidy=FALSE}
 library(aaltobda)
@@ -65,7 +54,7 @@ parameters {
   real<lower=0> lambda;
 }
 model {
-  lambda ~ exponential(0.2);
+  lambda ~ exponential(0.1);
   y ~ poisson(lambda);
 }
 generated quantities {
@@ -79,12 +68,87 @@ generated quantities {
 
 "
 
-data=list(length(data_1998_Acre$year), data_1998_Acre$number)
+data=list(N =length(data_1998_Acre$year), y=data_1998_Acre$number)
 
 fit1 <- stan(model_code=model1, data = data)
 print(fit1)
 
 
+
+```
+
+# Linear regression models
+```{r}
+# First focus on 1998 data
+n_states <- 23
+n_months <- 12
+
+# Mapping month names to numbers
+month_names <- c(unique(data_1998$month))
+month_numbers <- c(1:12)
+names(month_numbers) = month_names
+
+months_num <- month_numbers[data_1998$month]
+
+N <- length(data_1998$number)
+x <- months_num # predictor
+y <- data_1998$number # outcome
+
+data=list(N =N, x=x, y=y)
+
+fit1 <- stan("linear_regression_model.stan", data = data)
+
+```
+```{r}
+alpha <- as.matrix(fit1)[,1]
+beta <- as.matrix(fit1)[,2]
+plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
+   xlab="Alpha ", ylab="Beta", pch=10)
+
+stan_trace(fit1, pars=c("alpha", "beta", "sigma", "lp__"))
+
+stan_dens(fit1, pars=c("alpha", "beta", "sigma", "lp__"))
+
+fit1
+
+```
+
+# Linear regression model w.r.t the states of Brazil
+```{r}
+# First focus on 1998 data
+n_states <- 23
+n_months <- 12
+
+# Mapping state names to numbers
+state_names <- c(unique(data_1998$state))
+state_numbers <- c(1:23)
+names(state_numbers) = state_names
+
+state_num <- state_numbers[data_1998$state]
+
+N <- length(data_1998$number)
+x <- state_num # predictor
+y <- data_1998$number # outcome
+
+data=list(N =N, x=x, y=y)
+
+linfit2 <- stan("linear_regression_model.stan", data = data)
+
+```
+
+
+
+```{r}
+alpha <- as.matrix(linfit2)[,1]
+beta <- as.matrix(linfit2)[,2]
+plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
+   xlab="Alpha ", ylab="Beta", pch=10)
+
+stan_trace(linfit2, pars=c("alpha", "beta", "sigma", "lp__"))
+
+stan_dens(linfit2, pars=c("alpha", "beta", "sigma", "lp__"))
+
+linfit2
 
 ```
 
