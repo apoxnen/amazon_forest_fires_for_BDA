@@ -1,0 +1,120 @@
+---
+  title: "BDA - Project"
+author: "Anonymous"
+output: 
+  pdf_document: 
+  toc: yes
+toc_depth: 1
+keep_tex: true
+---
+  
+  ```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+options(tinytex.verbose = TRUE)
+```
+
+```{r, echo=FALSE}
+library(aaltobda)
+library (mvtnorm)
+
+library("rstan")
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
+
+```
+
+
+```{r, echo=TRUE, tidy=FALSE}
+library("ggplot2")
+library("bayesplot")
+theme_set(bayesplot::theme_default(base_family = "sans"))
+library(loo)
+
+```
+
+# Linear regression models
+```{r}
+# First focus on 1998 data on one state.
+l <- data_1998_Acre
+
+# Filter out zeros
+df1<- subset(l, l$number != 0)
+
+# Mapping month names to numbers
+month_names <- c(unique(data_1998$month))
+month_numbers <- c(1:12)
+names(month_numbers) = month_names
+df1$month_numerical <- month_numbers[df1$month]
+```
+
+```{r}
+# Run linear regression on non zero data:
+N <- length(df1$number)
+x <- df1$number # predictor
+y <- df1$month_numerical # outcome
+data=list(N =N, x=x, y=y)
+fit1 <- stan("linear_regression_model.stan", data = data)
+```
+
+```{r}
+plot(fit1)
+```
+
+
+```{r}
+# First focus on 1998 data on one state.
+n_states <- 23
+n_months <- 12
+# Mapping month names to numbers
+month_names <- c(unique(data_1998$month))
+month_numbers <- c(1:12)
+names(month_numbers) = month_names
+months_num <- month_numbers[data_1998$month]
+N <- length(data_1998$number)
+x <- months_num # predictor
+y <- data_1998$number # outcome
+data=list(N =N, x=x, y=y)
+fit1 <- stan("linear_regression_model.stan", data = data)
+```
+```{r}
+alpha <- as.matrix(fit1)[,1]
+beta <- as.matrix(fit1)[,2]
+plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
+   xlab="Alpha ", ylab="Beta", pch=10)
+stan_trace(fit1, pars=c("alpha", "beta", "sigma", "lp__"))
+stan_dens(fit1, pars=c("alpha", "beta", "sigma", "lp__"))
+fit1
+```
+
+# Linear regression model w.r.t the states of Brazil
+```{r}
+# First focus on 1998 data
+n_states <- 23
+n_months <- 12
+# Mapping state names to numbers
+state_names <- c(unique(data_1998$state))
+state_numbers <- c(1:23)
+names(state_numbers) = state_names
+state_num <- state_numbers[data_1998$state]
+N <- length(data_1998$number)
+x <- state_num # predictor
+y <- data_1998$number # outcome
+data=list(N =N, x=x, y=y)
+linfit2 <- stan("linear_regression_model.stan", data = data)
+```
+
+
+
+```{r}
+alpha <- as.matrix(linfit2)[,1]
+beta <- as.matrix(linfit2)[,2]
+plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
+   xlab="Alpha ", ylab="Beta", pch=10)
+stan_trace(linfit2, pars=c("alpha", "beta", "sigma", "lp__"))
+stan_dens(linfit2, pars=c("alpha", "beta", "sigma", "lp__"))
+linfit2
+```
