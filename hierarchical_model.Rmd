@@ -34,6 +34,7 @@ Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
 ```
 
 ```{r, echo=FALSE}
+# CREATION OF THE DATASET: rows=years, columns=states; the number of fires are the sum of the fires of the months for each year
 amazon=as.data.frame(amazon)
 years=levels(factor(sort(amazon$year)))
 states=levels(factor(sort(amazon$state)))
@@ -51,6 +52,7 @@ for (j in 1:length(states)) {
 
 ```{r, echo=TRUE}
 
+# CREATION OF THE DATASET (x=groups, y=values), in order to apply the models
 x = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
       rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
       rep(23,20))
@@ -78,8 +80,6 @@ data {
   int<lower=0> K;             // number of groups
   int<lower=1,upper=K> x[N];  // group indicator
   vector[N] y;
-                 
-  int pred_index;    // input location for prediction
 }
 
 parameters {
@@ -92,11 +92,14 @@ model {
 }
 
 generated quantities {
-  real ypred;
-  vector[N] log_lik;                                            // added line for this assignment
-  ypred = normal_rng(mu[pred_index], sigma[pred_index]);
+  vector[K] y_state;
+  vector[N] log_lik;                                
+
   for (i in 1:N)                                           
-    log_lik[i] = normal_lpdf(y[i] | mu[x[i]], sigma[x[i]]);     // added line for this assignment
+    log_lik[i] = normal_lpdf(y[i] | mu[x[i]], sigma[x[i]]);     
+  
+  for (i in 1:K)
+    y_state[i]=normal_rng(mu[i], sigma[i]);
 }
 
 "
@@ -106,8 +109,7 @@ data_s = list(
   N = 23*20,
   K = 23,
   x = x,
-  y = y,
-  pred_index = 6
+  y = y
 )
 
 # FIT OF THE MODEL IN STAN
@@ -122,8 +124,7 @@ fit_separate <- stan(
 
 samples_s = extract(object=fit_separate, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
 
-# check
-dim(samples_s$log_lik)
+#dim(samples_s$log_lik)
 
 ```
 
@@ -158,7 +159,7 @@ model {
 
 generated quantities { 
   real ypred;
-  vector[N] log_lik;            // added line
+  vector[N] log_lik;
   ypred = normal_rng(mu,sigma);
   for (i in 1:N)
     log_lik[i] = normal_lpdf(y[i] | mu, sigma);     // added line
@@ -183,8 +184,7 @@ fit_pooled <- stan(
 
 samples_p = extract(object=fit_pooled, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
 
-# check
-dim(samples_p$log_lik)
+#dim(samples_p$log_lik)
 
 ```
 
@@ -263,8 +263,7 @@ fit_hierarchical <- stan(
 
 samples_h = extract(object=fit_hierarchical, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
 
-# check
-dim(samples_h$log_lik)
+#dim(samples_h$log_lik)
 
 ```
 
@@ -273,7 +272,6 @@ dim(samples_h$log_lik)
 ### Point 2
 Compute the PSIS-LOO elpd values and the k-values for each of the three models.
 
-Answer:
 
 ```{r, echo=TRUE, tidy=FALSE}
 
@@ -377,36 +375,6 @@ peff_p
 peff_h
 
 ```
-
-
-
-### Point 4
-Assess how reliable the PSIS-LOO estimates are for the three models based on the k-values.
-
-Answer:
-The above results for k-value (first three lines) and PSIS-LOO (in the last line) are collected in the following table:
-(of course the results change avery time the code is run, so they could be a little bit different from the above reported)
-
-
-PSIS-LOO is useful since allow not to refitting K times the model, like K-fold cross validation requires.
-If all the $$\hat{k} < 0.7 $$, the PSIS-LOO estimate can be considered to be reliable,
-otherwise there is a concern that it may be biased (too optimistic, overestimating the predictive accuracy of the model).
-So, in case of $$\hat{k} > 0.7 $$, if there are just a few i, it is recommended sampling directly from each corresponding $$p(\theta^s|y_{-i}) $$.
-If there are a lot, the results should be checked using K-fold cross-validation.
-
-
-About the previous results, the $$\hat{k}$$ for the pooled and hierarchical models are all below 0.7. This means that the PSIS-LOO estimate is reliable.
-For the separate model, the obtained $$\hat{k} < 0.7 $$ are not all below 0.7. This means that the PSIS-LOO may be biased. But the values that don't respect this rule are a few ( 6%).
-
-
-
-
-### Point 5
-An assessment of whether there are differences between the models with regard to
-the elpdloo-cv, and if so, which model should be selected according to PSIS-LOO.
-
-Answer:
-According to PSIS-LOO, the model with the highest value is selected. As reported above in the table and in view of the previous discussion, the hierarchical model should be selected.
 
 
 
