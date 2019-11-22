@@ -317,3 +317,7 @@ mean(y) #60.8333
 ```
 
 
+Try with this!
+https://mc-stan.org/loo/articles/loo2-example.html
+
+
