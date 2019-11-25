@@ -1,7 +1,7 @@
 # FIX THE DATASET
 
 library(readr)
-amazon <- read_csv("Aalto/amazon_forest_fires_for_BDA/amazon.csv")
+amazon <- read_csv("amazon.csv")
 #View(amazon)
 
 #levels(factor(amazon$state))
@@ -14,6 +14,11 @@ for (i in 1:dim(amazon)[1]) {
 for (i in 1:dim(amazon)[1]) {
   if(amazon$month[i]=="Fevereiro")
     amazon$month[i]="February"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(startWith(amazon$month[i],"Mar"))
+    amazon$month[i]="March"
 }
 
 

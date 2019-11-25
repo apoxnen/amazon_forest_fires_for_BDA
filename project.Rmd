@@ -16,8 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 options(tinytex.verbose = TRUE)
 ```
 
-
-```{r, echo=TRUE, tidy=FALSE}
+```{r, echo=FALSE}
 library(aaltobda)
 library (mvtnorm)
 
@@ -25,6 +24,11 @@ library("rstan")
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
+
+```
+
+
+```{r, echo=TRUE, tidy=FALSE}
 library("ggplot2")
 library("bayesplot")
 theme_set(bayesplot::theme_default(base_family = "sans"))
@@ -36,14 +40,38 @@ library(loo)
 ## Work on 1998, Acre
 ```{r, echo=TRUE, tidy=FALSE}
 summary(data_1998_Acre)
-plot(1:12, data_1998_Acre$number)
 # https://mc-stan.org/docs/2_18/functions-reference/poisson.html
 #http://avehtari.github.io/BDA_R_demos/demos_rstan/ppc/poisson-ppc.html#2_fit_basic_poisson_model
 
+#plot 1
+plot(1:12, data_1998_Acre$number)
+
+#plot 2
 qplot(data_1998_Acre$number)
+
+#plot 3
+# generation of poisson with the same mean
+y=data_1998_Acre$number
+N=length(y)
+
+x <- rpois(N, mean(y))
+qplot(x)
+
+
+plotdata <- data.frame(
+  value = c(y, x), 
+  variable = rep(c("Our data", "Poisson data"), each = N)
+)
+
+ggplot(plotdata, aes(x = value, color = variable)) +
+  geom_freqpoly(binwidth = 0.5) +
+  scale_x_continuous(name = "", breaks = 0:max(x,y)) +
+  scale_color_manual(name = "", values = c("gray30", "purple"))
 ```
 
 ```{r, echo=TRUE, tidy=FALSE}
+# BASIC POISSON MODEL
+
 model1= "
 
 data {
@@ -68,89 +96,226 @@ generated quantities {
 
 "
 
-data=list(N =length(data_1998_Acre$year), y=data_1998_Acre$number)
+data=list(N=length(data_1998_Acre$year), y=data_1998_Acre$number)
 
-fit1 <- stan(model_code=model1, data = data)
+fit1 <- stan(model_code=model1,
+             data = data,
+             chains = 4,     # number of Markov chains
+            iter =1000,    # total number of iterations per chain
+            warmup=500)
 print(fit1)
-
-
-
 ```
 
-# Linear regression models
-```{r}
-# First focus on 1998 data
-n_states <- 23
-n_months <- 12
 
-# Mapping month names to numbers
-month_names <- c(unique(data_1998$month))
-month_numbers <- c(1:12)
-names(month_numbers) = month_names
+```{r, echo=TRUE, tidy=FALSE}
+# Posterior distribution of lambda
 
-months_num <- month_numbers[data_1998$month]
+color_scheme_set("brightblue") # check out ?bayesplot::color_scheme_set
+lambda_draws <- as.matrix(fit1, pars = "lambda")
+mcmc_areas(lambda_draws, prob = 0.8) # color 80% interval
 
-N <- length(data_1998$number)
-x <- months_num # predictor
-y <- data_1998$number # outcome
 
-data=list(N =N, x=x, y=y)
+# compare the mean of the data with the model
 
-fit1 <- stan("linear_regression_model.stan", data = data)
+print(fit1, pars="lambda") # 60.38
+y=data_1998_Acre$number
+mean(y) #60.8333
 
-```
-```{r}
-alpha <- as.matrix(fit1)[,1]
-beta <- as.matrix(fit1)[,2]
-plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
-   xlab="Alpha ", ylab="Beta", pch=10)
 
-stan_trace(fit1, pars=c("alpha", "beta", "sigma", "lp__"))
+# Graphical posterior predictive checks
 
-stan_dens(fit1, pars=c("alpha", "beta", "sigma", "lp__"))
+y_rep <- as.matrix(fit1, pars = "y_rep") # number of rows = number of post-warmup posterior draws
+# number of columns = length(y)
+dim(y_rep) 
 
-fit1
 
-```
+# other checks
 
-# Linear regression model w.r.t the states of Brazil
-```{r}
-# First focus on 1998 data
-n_states <- 23
-n_months <- 12
+ppc_hist(y, y_rep[1:8, ], binwidth = 1)
 
-# Mapping state names to numbers
-state_names <- c(unique(data_1998$state))
-state_numbers <- c(1:23)
-names(state_numbers) = state_names
+ppc_dens_overlay(y, y_rep[1:50, ])
 
-state_num <- state_numbers[data_1998$state]
+prop_zero <- function(x) mean(x == 0)
+print(prop_zero(y))
+ppc_stat(y, y_rep, stat = "prop_zero")
 
-N <- length(data_1998$number)
-x <- state_num # predictor
-y <- data_1998$number # outcome
+ppc_stat_2d(y, y_rep, stat = c("mean", "sd"))
 
-data=list(N =N, x=x, y=y)
 
-linfit2 <- stan("linear_regression_model.stan", data = data)
-
+## PROBLEM: THIS MODEL SEEMS NOT TO BE GOOD
 ```
 
 
 
-```{r}
-alpha <- as.matrix(linfit2)[,1]
-beta <- as.matrix(linfit2)[,2]
-plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
-   xlab="Alpha ", ylab="Beta", pch=10)
+```{r, echo=TRUE, tidy=FALSE}
+# TRY WITH ANOTHER MODEL 
+# This model says that there is some probability theta that y is zero and probability 1 - theta that y is positive. Conditional on observing a positive y, we use a truncated Poisson
+# y[n] ~ Poisson(lambda) T[1, U];
+# where T[1,U] indicates truncation with lower bound 1 and upper bound U, which for simplicity we’ll assume is max(y)
 
-stan_trace(linfit2, pars=c("alpha", "beta", "sigma", "lp__"))
+model2= "
 
-stan_dens(linfit2, pars=c("alpha", "beta", "sigma", "lp__"))
+data {
+  int<lower=1> N;
+  int<lower=0> y[N];
+}
 
-linfit2
+transformed data {
+  int U = max(y);  // upper truncation point
+}
+
+parameters {
+  real<lower=0,upper=1> theta; // Pr(y = 0)
+  real<lower=0> lambda; // Poisson rate parameter (if y > 0)
+}
+
+model {
+  lambda ~ exponential(0.01);
+  
+  for (n in 1:N) {
+    if (y[n] == 0) {
+      target += log(theta);  // log(Pr(y = 0))
+    } else {
+      target += log1m(theta);  // log(Pr(y > 0))
+      y[n] ~ poisson(lambda) T[1,U];  // truncated poisson
+    }
+  }
+}
+
+generated quantities {
+  real log_lik[N];
+  int y_rep[N];
+  for (n in 1:N) {
+    if (bernoulli_rng(theta)) {
+      y_rep[n] = 0;
+    } else {
+      // use a while loop because Stan doesn't have truncated RNGs
+      int w;  // temporary variable
+      w = poisson_rng(lambda); 
+      while (w == 0 || w > U)
+        w = poisson_rng(lambda);
+        
+      y_rep[n] = w;
+    }
+    if (y[n] == 0) {
+      log_lik[n] = log(theta);
+    } else {
+      log_lik[n] = log1m(theta)
+    + poisson_lpmf(y[n] | lambda)
+    - log_diff_exp(poisson_lcdf(U | lambda),
+                       poisson_lcdf(0 | lambda));
+    }
+  }
+}
+
+"
+
+fit2 <- stan(model_code=model2,
+             data = data,
+             chains = 4,  
+            iter =1000,    
+            warmup=500)
+print(fit2)
 
 ```
 
-# On linear models
+```{r, echo=TRUE, tidy=FALSE}
+lambda_draws2 <- as.matrix(fit2, pars = "lambda")
+lambdas <- cbind(lambda_fit1 = lambda_draws[, 1],
+                 lambda_fit2 = lambda_draws2[, 1])
+mcmc_areas(lambdas, prob = 0.8) # color 80% interval
+
+
+
+y_rep2 <- as.matrix(fit2, pars = "y_rep")
+ppc_hist(y, y_rep2[1:8, ], binwidth = 1)
+
+ppc_dens_overlay(y, y_rep2[1:50, ])
+
+ppc_stat(y, y_rep2, stat = "prop_zero")
+
+ppc_stat_2d(y, y_rep2, stat = c("mean", "sd")) # THIS PLOT SEEMS TO BE REALLY STRANGE
+
+ppc_error_hist(y, y_rep2[sample(nrow(y_rep2), 4), ], binwidth = 1)
+```
+
+```{r, echo=TRUE, tidy=FALSE}
+# SOME ANALYSIS ON THE FIRST TWO MODELS:
+# Comparison with leave-one-out cross-validation
+
+log_lik1 <- extract_log_lik(fit1, merge_chains = FALSE)
+r_eff1 <- relative_eff(exp(log_lik1)) 
+(loo1 <- loo(log_lik1, r_eff = r_eff1))
+
+log_lik2 <- extract_log_lik(fit2, merge_chains = FALSE)
+r_eff2 <- relative_eff(exp(log_lik2)) 
+(loo2 <- loo(log_lik2, r_eff = r_eff2))
+
+```
+
+
+
+```{r, echo=TRUE, tidy=FALSE}
+# TRY TO DO WITH ANOTHER MODEL
+# ZERO INFLATION
+#https://mc-stan.org/docs/2_20/stan-users-guide/zero-inflated-section.html
+
+model3= "
+  data {
+  int<lower=0> N;
+  int<lower=0> y[N];
+}
+parameters {
+  real<lower=0, upper=1> theta;
+  real<lower=0> lambda;
+}
+model {
+  for (n in 1:N) {
+    if (y[n] == 0)
+      target += log_sum_exp(bernoulli_lpmf(1 | theta),
+                            bernoulli_lpmf(0 | theta)
+                              + poisson_lpmf(y[n] | lambda));
+    else
+      target += bernoulli_lpmf(0 | theta)
+                  + poisson_lpmf(y[n] | lambda);
+  }
+}
+
+"
+
+
+fit3 <- stan(model_code=model3,
+             data = data,
+             chains = 4,  
+            iter =1000,    
+            warmup=500)
+print(fit3)
+
+
+```
+
+
+
+```{r, echo=TRUE, tidy=FALSE}
+# Posterior distribution of lambda
+
+color_scheme_set("brightblue") # check out ?bayesplot::color_scheme_set
+lambda_draws <- as.matrix(fit3, pars = "lambda")
+mcmc_areas(lambda_draws, prob = 0.8) # color 80% interval
+
+
+# compare the mean of the data with the model
+
+print(fit3, pars="lambda") 
+y=data_1998_Acre$number
+mean(y) #60.8333
+
+
+# Graphical posterior predictive checks
+
+
+```
+
+Try with this!
+https://mc-stan.org/loo/articles/loo2-example.html
 
