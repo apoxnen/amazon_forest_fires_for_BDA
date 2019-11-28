@@ -81,4 +81,10 @@ data_1998=amazon[which(amazon$year == "1998"),]
 #choose Acre
 data_1998_Acre=data_1998[which(data_1998$state == "Acre"),]
 
+# Remove dots:
+for (i in 1:length(amazon$number)) {
+  if (amazon$number[i] %% 1 != 0) {
+    amazon$number[i] = amazon$number[i]*1000
+  }
+}
 

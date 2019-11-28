@@ -36,63 +36,96 @@ library(loo)
 
 ```
 
-# Linear regression models
+# Regression models
 ```{r}
-# First focus on 1998 data on one state.
-l <- data_1998_Acre
-
-# Filter out zeros
-df1<- subset(l, l$number != 0)
-
-# Mapping month names to numbers
-month_names <- c(unique(data_1998$month))
-month_numbers <- c(1:12)
-names(month_numbers) = month_names
-df1$month_numerical <- month_numbers[df1$month]
-```
-
-```{r}
-# Run linear regression on non zero data:
-N <- length(df1$number)
-x <- df1$number # predictor
-y <- df1$month_numerical # outcome
-data=list(N =N, x=x, y=y)
-fit1 <- stan("linear_regression_model.stan", data = data)
-```
-
-```{r}
-plot(fit1)
+colnames(dataset)[14] = "Par"
+rownames(dataset)[3] = "Mar"
+df <- data.frame(dataset)
+plot(1:12, df[,1])
+matplot(1:12, df, )
+#plot(month ~ states,df)
 ```
 
 
-```{r}
-# First focus on 1998 data on one state.
-n_states <- 23
-n_months <- 12
-# Mapping month names to numbers
-month_names <- c(unique(data_1998$month))
-month_numbers <- c(1:12)
-names(month_numbers) = month_names
-months_num <- month_numbers[data_1998$month]
-N <- length(data_1998$number)
-x <- months_num # predictor
-y <- data_1998$number # outcome
-data=list(N =N, x=x, y=y)
-fit1 <- stan("linear_regression_model.stan", data = data)
-```
-```{r}
-alpha <- as.matrix(fit1)[,1]
-beta <- as.matrix(fit1)[,2]
-plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
-   xlab="Alpha ", ylab="Beta", pch=10)
-stan_trace(fit1, pars=c("lp__"))
-stan_dens(fit1, pars=c("alpha", "beta", "sigma", "lp__"))
-fit1
-```
-
-# Use the dataset for sum of fires in each state:
+## Use the dataset for sum of fires in each state:
 
 ```{r, echo=FALSE}
+library(readr)
+amazon <- read_csv("amazon.csv")
+#View(amazon)
+
+#levels(factor(amazon$state))
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Janeiro")
+    amazon$month[i]="January"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Fevereiro")
+    amazon$month[i]="February"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(startsWith(amazon$month[i],"Mar"))
+    amazon$month[i]="March"
+}
+
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Abril")
+    amazon$month[i]="April"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Maio")
+    amazon$month[i]="May"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Junho")
+    amazon$month[i]="June"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Julho")
+    amazon$month[i]="July"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Agosto")
+    amazon$month[i]="August"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Setembro")
+    amazon$month[i]="September"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Outubro")
+    amazon$month[i]="October"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Novembro")
+    amazon$month[i]="November"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Dezembro")
+    amazon$month[i]="Dicember"
+}
+
+
+
+# Remove dots:
+for (i in 1:length(amazon$number)) {
+  if (amazon$number[i] %% 1 != 0) {
+    amazon$number[i] = amazon$number[i]*1000
+  }
+}
+
 amazon=as.data.frame(amazon)
 years=levels(factor(sort(amazon$year)))
 states=levels(factor(sort(amazon$state)))
@@ -106,30 +139,102 @@ for (j in 1:length(states)) {
 }
 ```
 
-# Linear regression model w.r.t the states of Brazil and mean number of fires per year
-```{r}
-# Mapping state names to numbers
-state_names <- c(unique(amazon$state))
-state_numbers <- c(1:23)
-names(state_numbers) = state_names
-state_num <- unique(state_numbers[amazon$state])
-N <- 20              # num of states times num of years in dataset
-x <- unique(amazon$year)# year as predictor
-y <- c(t(dataset[,1]))      # sum of number of fires as data
-data=list(N =N, x=x, y=y)
-linfit2 <- stan("linear_regression_model.stan", data = data)
+# regression model w.r.t the states of Brazil and sum of number of fires per year
+
+Neg binomial regression model erikseen hierarkinen ja pooled. Ennustamaan tulipalojen summaa per vuosi per state ttai kk keskiarvoa
+```{r tidy=FALSE}
+y=dataset[,1]
+for (i in 2:23) {
+  y=cbind(y,dataset[,i])
+}
+y=as.vector(y)
+
+x = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
+      rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
+      rep(23,20))
+
+N <- length(y)
+xpred <- 24
+data=list(N =N, x=x, y=y, xpred = xpred)
+fit1 <- stan("regression_pooled.stan", data = data)
 ```
 
 
 
 ```{r}
-alpha <- as.matrix(linfit2)[,1]
-beta <- as.matrix(linfit2)[,2]
+alpha <- as.matrix(fit1)[,1]
+beta <- as.matrix(fit1)[,2]
 plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
    xlab="Alpha ", ylab="Beta", pch=10)
-stan_trace(linfit2, pars=c("alpha", "beta", "sigma", "lp__"))
-stan_dens(linfit2, pars=c("alpha", "beta", "sigma", "lp__"))
-linfit2
 
-p <- extract(linfit2, pars="lp__" )
+stan_trace(p, pars=c("ypred"))
+stan_dens(fit1, pars=c("ypred"))
+
+draws <- as.data.frame(fit1)
+hist(draws$ypred)
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Hierarchical Regression model
+```{r}
+y=dataset[,1]
+for (i in 2:23) {
+  y=cbind(y,dataset[,i])
+}
+y=as.vector(y)
+
+x = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
+      rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
+      rep(23,20))
+
+N <- 460          # N of observations per state
+K <- 23           # N of states
+xpred <- 24
+data=list(N =N, K=K, x=x, y=y, xpred = xpred)
+fit2 <- stan("regression_hierarchical.stan",
+             data = data,
+             chains = 4,     # number of Markov chains
+             iter =4000,    # total number of iterations per chain
+             warmup=3000,
+             cores = 2       # number of cores (could use one per chain)
+)
+```
+
+```{r}
+alpha <- as.matrix(fit2)[,1]
+beta <- as.matrix(fit2)[,2]
+plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
+   xlab="Alpha ", ylab="Beta", pch=10)
+
+stan_trace(fit2, pars=c("ypred"))
+stan_dens(fit2, pars=c("ypred"))
+stan_dens(fit2, pars=c("y_prep"))
+
+pred <- as.data.frame(extract(fit2, "y_prep"))
+colMeans(pred)
+
+#draws <- as.data.frame(fit2)
+#hist(draws$ypred)
+```
+
+
+
+
+
