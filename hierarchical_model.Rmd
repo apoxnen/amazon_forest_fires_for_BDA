@@ -33,8 +33,85 @@ rstan_options(auto_write = TRUE)
 Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
 ```
 
+
+############################################################
 ```{r, echo=FALSE}
-# CREATION OF THE DATASET: rows=years, columns=states; the number of fires are the sum of the fires of the months for each year
+library(readr)
+amazon <- read_csv("amazon.csv")
+#View(amazon)
+
+#levels(factor(amazon$state))
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Janeiro")
+    amazon$month[i]="January"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Fevereiro")
+    amazon$month[i]="February"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(startsWith(amazon$month[i],"Mar"))
+    amazon$month[i]="March"
+}
+
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Abril")
+    amazon$month[i]="April"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Maio")
+    amazon$month[i]="May"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Junho")
+    amazon$month[i]="June"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Julho")
+    amazon$month[i]="July"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Agosto")
+    amazon$month[i]="August"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Setembro")
+    amazon$month[i]="September"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Outubro")
+    amazon$month[i]="October"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Novembro")
+    amazon$month[i]="November"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Dezembro")
+    amazon$month[i]="Dicember"
+}
+
+
+
+# Remove dots:
+for (i in 1:length(amazon$number)) {
+  if (amazon$number[i] %% 1 != 0) {
+    amazon$number[i] = amazon$number[i]*1000
+  }
+}
+
 amazon=as.data.frame(amazon)
 years=levels(factor(sort(amazon$year)))
 states=levels(factor(sort(amazon$state)))
@@ -48,9 +125,7 @@ for (j in 1:length(states)) {
 }
 ```
 
-
-
-```{r, echo=TRUE}
+```{r , echo=TRUE}
 
 # CREATION OF THE DATASET (x=groups, y=values), in order to apply the models
 x = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
@@ -221,7 +296,7 @@ parameters {
 model {
   
   // using a normal distribution
-  mu0 ~ normal(1500,1000);      // weakly informative prior //Poisson and negative binomial
+  mu0 ~ normal(7933,25325);      // weakly informative prior //Poisson and negative binomial
 
   // https://datascienceplus.com/bayesian-regression-with-stan-beyond-normality/
   // https://mc-stan.org/docs/2_20/functions-reference/nbalt.html
@@ -295,7 +370,7 @@ parameters {
 }
 
 model {
-  lambda ~ exponential(0.2); //change this parameter
+  lambda ~ exponential(0.000125); //change this parameter
   y ~ poisson(lambda);
 }
 
