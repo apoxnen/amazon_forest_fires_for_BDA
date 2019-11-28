@@ -34,6 +34,7 @@ Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
 ```
 
 ```{r, echo=FALSE}
+# CREATION OF THE DATASET: rows=years, columns=states; the number of fires are the sum of the fires of the months for each year
 amazon=as.data.frame(amazon)
 years=levels(factor(sort(amazon$year)))
 states=levels(factor(sort(amazon$state)))
@@ -51,6 +52,7 @@ for (j in 1:length(states)) {
 
 ```{r, echo=TRUE}
 
+# CREATION OF THE DATASET (x=groups, y=values), in order to apply the models
 x = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
       rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
       rep(23,20))
@@ -78,8 +80,6 @@ data {
   int<lower=0> K;             // number of groups
   int<lower=1,upper=K> x[N];  // group indicator
   vector[N] y;
-                 
-  int pred_index;    // input location for prediction
 }
 
 parameters {
@@ -92,11 +92,14 @@ model {
 }
 
 generated quantities {
-  real ypred;
-  vector[N] log_lik;                                            // added line for this assignment
-  ypred = normal_rng(mu[pred_index], sigma[pred_index]);
+  vector[K] y_state;
+  vector[N] log_lik;                                
+
   for (i in 1:N)                                           
-    log_lik[i] = normal_lpdf(y[i] | mu[x[i]], sigma[x[i]]);     // added line for this assignment
+    log_lik[i] = normal_lpdf(y[i] | mu[x[i]], sigma[x[i]]);     
+  
+  for (i in 1:K)
+    y_state[i]=normal_rng(mu[i], sigma[i]);
 }
 
 "
@@ -106,8 +109,7 @@ data_s = list(
   N = 23*20,
   K = 23,
   x = x,
-  y = y,
-  pred_index = 6
+  y = y
 )
 
 # FIT OF THE MODEL IN STAN
@@ -122,8 +124,7 @@ fit_separate <- stan(
 
 samples_s = extract(object=fit_separate, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
 
-# check
-dim(samples_s$log_lik)
+#dim(samples_s$log_lik)
 
 ```
 
@@ -158,7 +159,7 @@ model {
 
 generated quantities { 
   real ypred;
-  vector[N] log_lik;            // added line
+  vector[N] log_lik;
   ypred = normal_rng(mu,sigma);
   for (i in 1:N)
     log_lik[i] = normal_lpdf(y[i] | mu, sigma);     // added line
@@ -183,8 +184,7 @@ fit_pooled <- stan(
 
 samples_p = extract(object=fit_pooled, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
 
-# check
-dim(samples_p$log_lik)
+#dim(samples_p$log_lik)
 
 ```
 
@@ -200,7 +200,7 @@ $$ y_{ji} \sim N(\overline{\mu}+\mu_j,\sigma)$$
 
 ```{r, echo=TRUE, tidy=FALSE}
 
-# DEFINITION OF HIERARCHICAL MODEL IN STAN
+# DEFINITION OF HIERARCHICAL MODEL IN STAN - NORMAL DISTRIBUTION OF FIRES
 
 hierarchical_code = "
 
@@ -219,7 +219,13 @@ parameters {
 }
 
 model {
-  mu0 ~ normal(1519,10);      // weakly informative prior
+  
+  // using a normal distribution
+  mu0 ~ normal(1500,1000);      // weakly informative prior //Poisson and negative binomial
+
+  // https://datascienceplus.com/bayesian-regression-with-stan-beyond-normality/
+  // https://mc-stan.org/docs/2_20/functions-reference/nbalt.html
+ 
   sigma0 ~ cauchy(0,4);     // weakly informative prior
   mu ~ normal(mu0, sigma0); // population prior with unknown parameters
   sigma ~ cauchy(0,4);       // weakly informative prior
@@ -236,7 +242,7 @@ generated quantities {
   ypred = normal_rng(mupred, sigma);
   
   for (i in 1:N) 
-    log_lik[i] = normal_lpdf(y[i] | mu[x[i]], sigma);     // added line for this assignment
+    log_lik[i] = normal_lpdf(y[i] | mu[x[i]], sigma); 
 
   for (i in 1:K)
     y_state[i]=normal_rng(mu[i], sigma);
@@ -263,17 +269,141 @@ fit_hierarchical <- stan(
 
 samples_h = extract(object=fit_hierarchical, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
 
-# check
-dim(samples_h$log_lik)
+#dim(samples_h$log_lik)
 
 ```
+
+
+```{r, echo=TRUE, tidy=FALSE}
+
+# DEFINITION OF HIERARCHICAL MODEL IN STAN - Poisson distribution of fires
+
+## the values are not integer!! Check the . in the original dataset
+#https://github.com/avehtari/BDA_R_demos/blob/master/demos_rstan/ppc/poisson-simple.stan
+
+hierarchical_code_2 = "
+
+data {
+  int<lower=0> N;           // number of data points
+  int<lower=0> K;           // number of groups
+  int<lower=1,upper=K> x[N]; // group indicator
+  int<lower=0> y[N];              
+}
+
+parameters {
+  real<lower=0> lambda;     
+}
+
+model {
+  lambda ~ exponential(0.2); //change this parameter
+  y ~ poisson(lambda);
+}
+
+generated quantities {
+  int<lower=0> y_rep[K]; 
+  vector[N] log_lik; 
+  
+  for (i in 1:N) 
+    log_lik[i] = poisson_lpmf(y[i] | lambda);
+
+  for (i in 1:K) 
+    y_rep[i] = poisson_rng(lambda); 
+}
+"
+# DEFINITION OF THE DATA
+data_hierarchical = list(
+  N = 23*20,
+  K = 23,
+  x = x,
+  y = y
+)
+
+
+# FIT OF THE MODEL IN STAN
+fit_hierarchical_2 <- stan(
+  model_code = hierarchical_code_2,  # Stan program
+  data = data_hierarchical,    # named list of data
+  chains = 4,     # number of Markov chains
+  iter =4000,    # total number of iterations per chain
+  warmup=3000,
+  cores = 2       # number of cores (could use one per chain)
+)
+
+samples_h_2 = extract(object=fit_hierarchical_2, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
+
+
+```
+
+
+```{r, echo=TRUE, tidy=FALSE}
+
+# DEFINITION OF HIERARCHICAL MODEL IN STAN - Negative binomial distribution
+
+## the values are not integer!! Check the . in the original dataset
+
+hierarchical_code_3 = "
+
+data {
+  int<lower=0> N;           // number of data points
+  int<lower=0> K;           // number of groups
+  int<lower=1,upper=K> x[N]; // group indicator
+  int<lower=0> y[N];              
+}
+
+parameters {
+  real alpha; 
+  real beta;
+}
+
+model {
+  alpha ~ exponential(0.2); //change this
+  beta ~ exponential(0.2); //change this
+  y ~ neg_binomial(alpha, beta);
+}
+
+generated quantities {
+  int<lower=0> y_rep[K]; 
+  vector[N] log_lik; 
+  
+  for (i in 1:N) 
+    log_lik[i] = neg_binomial_lpmf(y[i] | alpha, beta);
+
+  for (i in 1:K) 
+    y_rep[i] = neg_binomial_rng(alpha, beta); 
+}
+"
+# DEFINITION OF THE DATA
+data_hierarchical = list(
+  N = 23*20,
+  K = 23,
+  x = x,
+  y = y
+)
+
+
+# FIT OF THE MODEL IN STAN
+fit_hierarchical_3 <- stan(
+  model_code = hierarchical_code_3,  # Stan program
+  data = data_hierarchical,    # named list of data
+  chains = 4,     # number of Markov chains
+  iter =4000,    # total number of iterations per chain
+  warmup=3000,
+  cores = 2       # number of cores (could use one per chain)
+)
+
+samples_h_3 = extract(object=fit_hierarchical_3, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
+
+
+```
+
+
+
 
 
 
 ### Point 2
 Compute the PSIS-LOO elpd values and the k-values for each of the three models.
 
-Answer:
 
 ```{r, echo=TRUE, tidy=FALSE}
 
@@ -297,7 +427,7 @@ loo_p <- loo(log_lik_p, r_eff = r_eff_p, save_psis=TRUE, cores=2 )
 print(loo_p)
 
 
-# HIERARCHICAL MODEL
+# HIERARCHICAL MODEL - normal
 loo_hierarchical=loo(fit_hierarchical)
 plot(loo_hierarchical)
 
@@ -305,6 +435,26 @@ log_lik_h <- extract_log_lik(fit_hierarchical, merge_chains = FALSE)
 r_eff_h <- relative_eff(exp(log_lik_h))
 loo_h <- loo(log_lik_h, r_eff = r_eff_h, save_psis=TRUE, cores=2 )
 print(loo_h)
+
+
+# HIERARCHICAL MODEL - poisson
+loo_hierarchical_2=loo(fit_hierarchical_2)
+plot(loo_hierarchical_2)
+
+log_lik_h_2 <- extract_log_lik(fit_hierarchical_2, merge_chains = FALSE)
+r_eff_h_2 <- relative_eff(exp(log_lik_h_2))
+loo_h_2 <- loo(log_lik_h_2, r_eff = r_eff_h_2, save_psis=TRUE, cores=2 )
+print(loo_h_2)
+
+
+# HIERARCHICAL MODEL - negative binomial
+loo_hierarchical_3=loo(fit_hierarchical_3)
+plot(loo_hierarchical_3)
+
+log_lik_h_3 <- extract_log_lik(fit_hierarchical_3, merge_chains = FALSE)
+r_eff_h_3 <- relative_eff(exp(log_lik_h_3))
+loo_h_3 <- loo(log_lik_h_3, r_eff = r_eff_h_3, save_psis=TRUE, cores=2 )
+print(loo_h_3)
 
 
 ```
@@ -316,7 +466,9 @@ print(loo_h)
 
 loo_s$estimates[1] #separate
 loo_p$estimates[1] #pooled
-loo_h$estimates[1] #hierarchical
+loo_h$estimates[1] #hierarchical - normal
+loo_h_2$estimates[1] #hierarchical - poisson
+loo_h_3$estimates[1] #hierarchical - negative binomial
 
 ```
 
@@ -356,10 +508,21 @@ for(i in 1:n)
  vector_p[i]=log(1/S*(sum(exp(samples_p$log_lik[,i]))))
 
 
-# HIERARCHICAL
+# HIERARCHICAL - normal
 vector_h=rep(0,n)
 for(i in 1:n)
  vector_h[i]=log(1/S*(sum(exp(samples_h$log_lik[,i]))))
+
+# HIERARCHICAL - poisson
+vector_h_2=rep(0,n)
+for(i in 1:n)
+ vector_h_2[i]=log(1/S*(sum(exp(samples_h_2$log_lik[,i]))))
+
+# HIERARCHICAL - negative binomial
+vector_h_3=rep(0,n)
+for(i in 1:n)
+ vector_h_3[i]=log(1/S*(sum(exp(samples_h_3$log_lik[,i]))))
+
 
 ```
 
@@ -371,42 +534,16 @@ for(i in 1:n)
 peff_s = sum(vector_s) - loo_s$estimates[1]
 peff_p = sum(vector_p) -loo_p$estimates[1]
 peff_h = sum(vector_h) - loo_h$estimates[1]
+peff_h_2 = sum(vector_h_2) - loo_h_2$estimates[1]
+peff_h_3 = sum(vector_h_3) - loo_h_3$estimates[1]
 
 peff_s
 peff_p
-peff_h
+peff_h #hierarchical normal
+peff_h_2 #hierarchical poisson
+peff_h_3 #hierarchical negative binomial
 
 ```
-
-
-
-### Point 4
-Assess how reliable the PSIS-LOO estimates are for the three models based on the k-values.
-
-Answer:
-The above results for k-value (first three lines) and PSIS-LOO (in the last line) are collected in the following table:
-(of course the results change avery time the code is run, so they could be a little bit different from the above reported)
-
-
-PSIS-LOO is useful since allow not to refitting K times the model, like K-fold cross validation requires.
-If all the $$\hat{k} < 0.7 $$, the PSIS-LOO estimate can be considered to be reliable,
-otherwise there is a concern that it may be biased (too optimistic, overestimating the predictive accuracy of the model).
-So, in case of $$\hat{k} > 0.7 $$, if there are just a few i, it is recommended sampling directly from each corresponding $$p(\theta^s|y_{-i}) $$.
-If there are a lot, the results should be checked using K-fold cross-validation.
-
-
-About the previous results, the $$\hat{k}$$ for the pooled and hierarchical models are all below 0.7. This means that the PSIS-LOO estimate is reliable.
-For the separate model, the obtained $$\hat{k} < 0.7 $$ are not all below 0.7. This means that the PSIS-LOO may be biased. But the values that don't respect this rule are a few ( 6%).
-
-
-
-
-### Point 5
-An assessment of whether there are differences between the models with regard to
-the elpdloo-cv, and if so, which model should be selected according to PSIS-LOO.
-
-Answer:
-According to PSIS-LOO, the model with the highest value is selected. As reported above in the table and in view of the previous discussion, the hierarchical model should be selected.
 
 
 
