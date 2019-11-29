@@ -1,0 +1,246 @@
+---
+title: "BDA - Poisson models"
+author: "Anonymous"
+output: 
+  pdf_document: 
+    toc: yes
+    toc_depth: 1
+    keep_tex: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+options(tinytex.verbose = TRUE)
+```
+
+```{r, echo=FALSE}
+# INCLUDE LIBRARIES
+library(aaltobda)
+library (mvtnorm)
+library("rstan")
+library("loo")
+library("rstanarm")
+library("bayesplot")
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
+```
+
+
+```{r, echo=FALSE}
+library(readr)
+amazon <- read_csv("amazon.csv")
+#View(amazon)
+#levels(factor(amazon$state))
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Janeiro")
+    amazon$month[i]="January"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Fevereiro")
+    amazon$month[i]="February"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(startsWith(amazon$month[i],"Mar"))
+    amazon$month[i]="March"
+}
+
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Abril")
+    amazon$month[i]="April"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Maio")
+    amazon$month[i]="May"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Junho")
+    amazon$month[i]="June"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Julho")
+    amazon$month[i]="July"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Agosto")
+    amazon$month[i]="August"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Setembro")
+    amazon$month[i]="September"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Outubro")
+    amazon$month[i]="October"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Novembro")
+    amazon$month[i]="November"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Dezembro")
+    amazon$month[i]="Dicember"
+}
+
+# Remove dots:
+for (i in 1:length(amazon$number)) {
+  if (amazon$number[i] %% 1 != 0) {
+    amazon$number[i] = amazon$number[i]*1000
+  }
+}
+
+amazon=as.data.frame(amazon)
+years=levels(factor(sort(amazon$year)))
+states=levels(factor(sort(amazon$state)))
+dataset=as.data.frame(matrix(rep(0,length(years)*length(states)), nrow=length(years), byrow=TRUE))
+colnames(dataset)=states
+rownames(dataset)=years
+for (j in 1:length(states)) {
+  for (i in 1:length(years)) {
+    dataset[i,j] = sum(amazon[which(amazon$year==years[i] & amazon$state==states[j]),4])
+  }
+}
+```
+
+```{r , echo=TRUE}
+# CREATION OF THE DATASET (x=groups, y=values), in order to apply the models
+x = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
+      rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
+      rep(23,20))
+y=dataset[,1]
+for (i in 2:23) {
+  y=cbind(y,dataset[,i])
+}
+y=as.vector(y)
+```
+
+
+## POISSON MODELS
+
+```{r, echo=TRUE, tidy=FALSE}
+
+#https://github.com/avehtari/BDA_R_demos/blob/master/demos_rstan/ppc/poisson-simple.stan
+
+pooled_poisson = "
+data {
+  int<lower=0> N;           // number of data points
+  int<lower=0> K;           // number of groups
+  int<lower=1,upper=K> x[N]; // group indicator
+  int<lower=0> y[N];              
+}
+parameters {
+  real<lower=0> lambda;     
+}
+model {
+  lambda ~ exponential(0.000125); 
+  y ~ poisson(lambda);
+}
+generated quantities {
+  int<lower=0> y_rep[K]; 
+  vector[N] log_lik; 
+  
+  for (i in 1:N) 
+    log_lik[i] = poisson_lpmf(y[i] | lambda);
+
+  for (i in 1:K) 
+    y_rep[i] = poisson_rng(lambda); 
+}
+"
+
+##########################################################
+
+separate_poisson = "
+
+data {
+  int<lower=0> N;           // number of data points
+  int<lower=0> K;           // number of groups
+  int<lower=1,upper=K> x[N]; // group indicator
+  int<lower=0> y[N];              
+}
+
+parameters {
+  real<lower=0> lambda[K];
+}
+
+model {
+  lambda ~ exponential(0.0001260604);
+  y ~ poisson(lambda[x]);
+}
+
+generated quantities {
+  int<lower=0> y_rep[K]; 
+  vector[N] log_lik; 
+
+  for (i in 1:N) 
+    log_lik[i] = poisson_lpmf(y[i] | lambda[x[i]]);
+  for (i in 1:K) 
+    y_rep[i] = poisson_rng(lambda[i]); 
+}
+"
+```
+
+
+```{r, echo=TRUE, tidy=FALSE}
+# DEFINITION OF THE DATA (a subset of data)
+data = list(
+  N = 4*20,    #N=23*20
+  K = 4,       #K=23
+  x = x[1:80], #x=x
+  y = y[1:80]  #y=y
+)
+
+
+# FIT OF THE MODEL IN STAN: choose the model to fit!
+fit <- stan(
+  model_code = separate_poisson,  # Stan program
+  data = data,    # named list of data
+  chains = 4,     # number of Markov chains
+  iter =4000,    # total number of iterations per chain
+  warmup=3000,
+  cores = 2       # number of cores (could use one per chain)
+)
+
+samples = extract(object=fit, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
+
+log_lik <- extract_log_lik(fit, merge_chains = FALSE)
+r_eff <- relative_eff(exp(log_lik))
+loo_model <- loo(log_lik, r_eff = r_eff, save_psis=TRUE, cores=2 )
+print(loo_model)
+plot(loo_model)
+
+# PSIS-LOO values
+loo_model$estimates[1] 
+
+```
+
+
+```{r, echo=TRUE, tidy=FALSE}
+S=4000
+n=4*20       #n=20*23
+vector=rep(0,n)
+for(i in 1:n)
+ vector[i]=log(1/S*(sum(exp(samples$log_lik[,i]))))
+
+peff = sum(vector) - loo_model$estimates[1]
+peff
+```
+
+
+

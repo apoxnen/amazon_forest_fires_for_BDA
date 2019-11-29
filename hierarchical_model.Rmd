@@ -34,7 +34,6 @@ Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
 ```
 
 
-############################################################
 ```{r, echo=FALSE}
 library(readr)
 amazon <- read_csv("amazon.csv")
@@ -348,32 +347,29 @@ samples_h = extract(object=fit_hierarchical, permuted = TRUE, inc_warmup = FALSE
 
 ```
 
+## POISSON MODELS
 
 ```{r, echo=TRUE, tidy=FALSE}
 
-# DEFINITION OF HIERARCHICAL MODEL IN STAN - Poisson distribution of fires
+# DEFINITION OF SEPARATE MODEL IN STAN - Poisson distribution of fires
 
 ## the values are not integer!! Check the . in the original dataset
 #https://github.com/avehtari/BDA_R_demos/blob/master/demos_rstan/ppc/poisson-simple.stan
 
-hierarchical_code_2 = "
-
+pooled_code_2_poisson = "
 data {
   int<lower=0> N;           // number of data points
   int<lower=0> K;           // number of groups
   int<lower=1,upper=K> x[N]; // group indicator
   int<lower=0> y[N];              
 }
-
 parameters {
   real<lower=0> lambda;     
 }
-
 model {
   lambda ~ exponential(0.000125); //change this parameter
   y ~ poisson(lambda);
 }
-
 generated quantities {
   int<lower=0> y_rep[K]; 
   vector[N] log_lik; 
@@ -385,18 +381,53 @@ generated quantities {
     y_rep[i] = poisson_rng(lambda); 
 }
 "
+
+
+
+
+separate_code_2_poisson = "
+
+data {
+  int<lower=0> N;           // number of data points
+  int<lower=0> K;           // number of groups
+  int<lower=1,upper=K> x[N]; // group indicator
+  int<lower=0> y[N];              
+}
+
+parameters {
+  //real<lower=0> lambda;  
+  //vector[K] lambda;
+  real<lower=0> lambda[K];
+}
+
+model {
+  lambda ~ exponential(0.0001260604); //change this parameter
+  y ~ poisson(lambda[x]);
+}
+
+generated quantities {
+  int<lower=0> y_rep[K]; 
+  vector[N] log_lik; 
+
+  for (i in 1:N) 
+    log_lik[i] = poisson_lpmf(y[i] | lambda[x[i]]);
+  for (i in 1:K) 
+    y_rep[i] = poisson_rng(lambda[i]); 
+}
+"
+
 # DEFINITION OF THE DATA
 data_hierarchical = list(
-  N = 23*20,
-  K = 23,
-  x = x,
-  y = y
+  N = 4*20,
+  K = 4,
+  x = x[1:80],
+  y = y[1:80]
 )
 
 
 # FIT OF THE MODEL IN STAN
 fit_hierarchical_2 <- stan(
-  model_code = hierarchical_code_2,  # Stan program
+  model_code = pooled_code_2_poisson,  # Stan program
   data = data_hierarchical,    # named list of data
   chains = 4,     # number of Markov chains
   iter =4000,    # total number of iterations per chain
@@ -510,9 +541,11 @@ log_lik_h <- extract_log_lik(fit_hierarchical, merge_chains = FALSE)
 r_eff_h <- relative_eff(exp(log_lik_h))
 loo_h <- loo(log_lik_h, r_eff = r_eff_h, save_psis=TRUE, cores=2 )
 print(loo_h)
+plot(loo_h)
 
 
 # HIERARCHICAL MODEL - poisson
+
 loo_hierarchical_2=loo(fit_hierarchical_2)
 plot(loo_hierarchical_2)
 
