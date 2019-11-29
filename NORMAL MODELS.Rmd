@@ -1,0 +1,465 @@
+---
+title: "BDA - Hierarchical model"
+author: "Anonymous"
+output: 
+  pdf_document: 
+    toc: yes
+    toc_depth: 1
+    keep_tex: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+options(tinytex.verbose = TRUE)
+```
+
+```{r, echo=FALSE}
+
+# INCLUDE LIBRARIES
+
+library(aaltobda)
+library (mvtnorm)
+library("rstan")
+library("loo")
+library("rstanarm")
+library("bayesplot")
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+Sys.setenv(LOCAL_CPPFLAGS = '-march=native')
+```
+
+
+```{r, echo=FALSE}
+library(readr)
+amazon <- read_csv("amazon.csv")
+#View(amazon)
+
+#levels(factor(amazon$state))
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Janeiro")
+    amazon$month[i]="January"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Fevereiro")
+    amazon$month[i]="February"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(startsWith(amazon$month[i],"Mar"))
+    amazon$month[i]="March"
+}
+
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Abril")
+    amazon$month[i]="April"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Maio")
+    amazon$month[i]="May"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Junho")
+    amazon$month[i]="June"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Julho")
+    amazon$month[i]="July"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Agosto")
+    amazon$month[i]="August"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Setembro")
+    amazon$month[i]="September"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Outubro")
+    amazon$month[i]="October"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Novembro")
+    amazon$month[i]="November"
+}
+
+for (i in 1:dim(amazon)[1]) {
+  if(amazon$month[i]=="Dezembro")
+    amazon$month[i]="Dicember"
+}
+
+
+
+# Remove dots:
+for (i in 1:length(amazon$number)) {
+  if (amazon$number[i] %% 1 != 0) {
+    amazon$number[i] = amazon$number[i]*1000
+  }
+}
+
+amazon=as.data.frame(amazon)
+years=levels(factor(sort(amazon$year)))
+states=levels(factor(sort(amazon$state)))
+dataset=as.data.frame(matrix(rep(0,length(years)*length(states)), nrow=length(years), byrow=TRUE))
+colnames(dataset)=states
+rownames(dataset)=years
+for (j in 1:length(states)) {
+  for (i in 1:length(years)) {
+    dataset[i,j] = sum(amazon[which(amazon$year==years[i] & amazon$state==states[j]),4])
+  }
+}
+```
+
+```{r , echo=TRUE}
+
+# CREATION OF THE DATASET (x=groups, y=values), in order to apply the models
+x = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
+      rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
+      rep(23,20))
+y=dataset[,1]
+for (i in 2:23) {
+  y=cbind(y,dataset[,i])
+}
+y=as.vector(y)
+
+```
+
+
+## Point 1
+
+#### SEPARATE MODEL
+$$ y_{ji} \sim N(\mu_j,\sigma_j)$$
+```{r, echo=TRUE, tidy=FALSE}
+
+# DEFINITION OF THE SEPARATE MODEL IN STAN
+
+separate_code = "
+
+data {
+  int<lower=0> N;             // number of data points
+  int<lower=0> K;             // number of groups
+  int<lower=1,upper=K> x[N];  // group indicator
+  vector[N] y;
+}
+
+parameters {
+  vector[K] mu;               // group means
+  vector<lower=0>[K] sigma;   //group stds
+}
+
+model {
+  y ~ normal(mu[x], sigma[x]);
+}
+
+generated quantities {
+  vector[K] y_state;
+  vector[N] log_lik;                                
+
+  for (i in 1:N)                                           
+    log_lik[i] = normal_lpdf(y[i] | mu[x[i]], sigma[x[i]]);     
+  
+  for (i in 1:K)
+    y_state[i]=normal_rng(mu[i], sigma[i]);
+}
+
+"
+
+# DEFINITION OF THE DATA
+data_s = list(
+  N = 23*20,
+  K = 23,
+  x = x,
+  y = y
+)
+
+# FIT OF THE MODEL IN STAN
+fit_separate <- stan(
+  model_code = separate_code,  # Stan program
+  data = data_s,    # named list of data
+  chains = 4,     # number of Markov chains
+  iter =4000,    # total number of iterations per chain
+  warmup=3000,
+  cores = 2       # number of cores (could use one per chain)
+)
+
+samples_s = extract(object=fit_separate, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
+
+#dim(samples_s$log_lik)
+
+```
+
+
+
+
+
+
+#### POOLED MODEL
+$$ y_i \sim N(\mu,\sigma)$$
+
+```{r, echo=TRUE, tidy=FALSE}
+
+# DEFINITION OF THE POOLED MODEL IN STAN
+
+pooled_code = "
+
+data {
+  int<lower=0> N;      // number of data points
+  vector[N] y;         //
+}
+
+parameters {
+  real mu;             // common mean
+  real<lower=0> sigma; // common std
+}
+
+model {
+  y ~ normal(mu, sigma);
+}
+
+
+generated quantities { 
+  real ypred;
+  vector[N] log_lik;
+  ypred = normal_rng(mu,sigma);
+  for (i in 1:N)
+    log_lik[i] = normal_lpdf(y[i] | mu, sigma);     // added line
+}
+"
+
+# DEFINITION OF THE DATA
+data_pooled = list(
+  N = 23*20,
+  y = y
+)
+
+# FIT OF THE MODEL IN STAN
+fit_pooled <- stan(
+  model_code = pooled_code,  # Stan program
+  data = data_pooled,    # named list of data
+  chains = 4,     # number of Markov chains
+  iter =4000,    # total number of iterations per chain
+  warmup=3000,
+  cores = 2       # number of cores (could use one per chain)
+)
+
+samples_p = extract(object=fit_pooled, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
+
+#dim(samples_p$log_lik)
+
+```
+
+
+
+
+
+
+
+#### HIERARCHICAL MODEL
+$$ y_{ji} \sim N(\overline{\mu}+\mu_j,\sigma)$$
+
+
+```{r, echo=TRUE, tidy=FALSE}
+
+# DEFINITION OF HIERARCHICAL MODEL IN STAN - NORMAL DISTRIBUTION OF FIRES
+
+hierarchical_code = "
+
+data {
+  int<lower=0> N;           // number of data points
+  int<lower=0> K;           // number of groups
+  int<lower=1,upper=K> x[N]; // group indicator
+  vector[N] y;              
+}
+
+parameters {
+  real mu0;                 // prior mean
+  real<lower=0> sigma0;     // prior std
+  vector[K] mu;             // group means
+  real<lower=0> sigma;      // common std
+}
+
+model {
+  
+  // using a normal distribution
+  mu0 ~ normal(7933,25325);      // weakly informative prior //Poisson and negative binomial
+
+  // https://datascienceplus.com/bayesian-regression-with-stan-beyond-normality/
+  // https://mc-stan.org/docs/2_20/functions-reference/nbalt.html
+ 
+  sigma0 ~ cauchy(0,4);     // weakly informative prior
+  mu ~ normal(mu0, sigma0); // population prior with unknown parameters
+  sigma ~ cauchy(0,4);       // weakly informative prior
+  y ~ normal(mu[x], sigma);
+}
+
+generated quantities {
+  real ypred;
+  real mupred;
+  vector[K] y_state;
+  vector[N] log_lik; 
+
+  mupred = normal_rng(mu0,sigma0);
+  ypred = normal_rng(mupred, sigma);
+  
+  for (i in 1:N) 
+    log_lik[i] = normal_lpdf(y[i] | mu[x[i]], sigma); 
+
+  for (i in 1:K)
+    y_state[i]=normal_rng(mu[i], sigma);
+
+}
+"
+# DEFINITION OF THE DATA
+data_hierarchical = list(
+  N = 23*20,
+  K = 23,
+  x = x,
+  y = y
+)
+
+# FIT OF THE MODEL IN STAN
+fit_hierarchical <- stan(
+  model_code = hierarchical_code,  # Stan program
+  data = data_hierarchical,    # named list of data
+  chains = 4,     # number of Markov chains
+  iter =4000,    # total number of iterations per chain
+  warmup=3000,
+  cores = 2       # number of cores (could use one per chain)
+)
+
+samples_h = extract(object=fit_hierarchical, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
+
+#dim(samples_h$log_lik)
+
+```
+
+
+
+
+### Point 2
+Compute the PSIS-LOO elpd values and the k-values for each of the three models.
+
+
+```{r, echo=TRUE, tidy=FALSE}
+
+# SEPARATE MODEL
+loo_separate=loo(fit_separate)
+plot(loo_separate)
+
+log_lik_s <- extract_log_lik(fit_separate, merge_chains = FALSE)
+r_eff_s <- relative_eff(exp(log_lik_s))
+loo_s <- loo(log_lik_s, r_eff = r_eff_s, save_psis=TRUE, cores=2 )
+print(loo_s)
+
+
+# POOLED MODEL
+loo_pooled=loo(fit_pooled) 
+plot(loo_pooled)
+
+log_lik_p <- extract_log_lik(fit_pooled, merge_chains = FALSE)
+r_eff_p <- relative_eff(exp(log_lik_p))
+loo_p <- loo(log_lik_p, r_eff = r_eff_p, save_psis=TRUE, cores=2 )
+print(loo_p)
+
+
+# HIERARCHICAL MODEL - normal
+loo_hierarchical=loo(fit_hierarchical)
+plot(loo_hierarchical)
+
+log_lik_h <- extract_log_lik(fit_hierarchical, merge_chains = FALSE)
+r_eff_h <- relative_eff(exp(log_lik_h))
+loo_h <- loo(log_lik_h, r_eff = r_eff_h, save_psis=TRUE, cores=2 )
+print(loo_h)
+plot(loo_h)
+
+```
+
+
+```{r, echo=TRUE, tidy=FALSE}
+
+# ESTIMATION OF PSIS-LOO values 
+
+loo_s$estimates[1] #separate
+loo_p$estimates[1] #pooled
+loo_h$estimates[1] #hierarchical - normal
+
+```
+
+
+
+### Point 3
+Compute the effective number of parameters Peff for each of the three models.
+https://mc-stan.org/loo/reference/loo-glossary.html
+
+Answer:
+Equation (7.15) in the book:
+$$ p_{loo-cv} = lppd - lppd_{loo-cv} $$
+where
+
+$$ lppd_{loo-cv} $$ is the PSIS-LOO value (sum of the LOO log densities) (calculated above in point 2)
+
+and 
+$$ lppd = \sum_{i=1}^n \log( \frac{1}{S} \sum_{s=1}^S p(y_i|\theta^s))$$
+The lppd of the observed data y is an overestimate of the elppd for future data.
+
+
+
+```{r, echo=TRUE, tidy=FALSE}
+S=4000
+n=20*23
+
+# ESTIMATION OF lppd
+
+# SEPARATE
+vector_s=rep(0,n)
+for(i in 1:n)
+ vector_s[i]=log(1/S*(sum(exp(samples_s$log_lik[,i]))))
+
+# POOLED
+vector_p=rep(0,n)
+for(i in 1:n)
+ vector_p[i]=log(1/S*(sum(exp(samples_p$log_lik[,i]))))
+
+
+# HIERARCHICAL - normal
+vector_h=rep(0,n)
+for(i in 1:n)
+ vector_h[i]=log(1/S*(sum(exp(samples_h$log_lik[,i]))))
+
+```
+
+
+```{r, echo=TRUE, tidy=FALSE}
+
+#RESULTING VALUES FOR peff
+
+peff_s = sum(vector_s) - loo_s$estimates[1]
+peff_p = sum(vector_p) -loo_p$estimates[1]
+peff_h = sum(vector_h) - loo_h$estimates[1]
+
+peff_s
+peff_p
+peff_h #hierarchical normal
+
+
+```
+
+
+
+
+
+

@@ -1,5 +1,5 @@
 ---
-title: "BDA - Poisson models"
+title: "BDA - Negative binomial models"
 author: "Anonymous"
 output: 
   pdf_document: 
@@ -132,41 +132,48 @@ y=as.vector(y)
 ```
 
 
-## POISSON MODELS
+## NEGATIVE BINOMIAL MODELS
 
 ```{r, echo=TRUE, tidy=FALSE}
 
 #https://github.com/avehtari/BDA_R_demos/blob/master/demos_rstan/ppc/poisson-simple.stan
 
-pooled_poisson = "
+pooled_negative_bin = "
+
 data {
   int<lower=0> N;           // number of data points
   int<lower=0> K;           // number of groups
   int<lower=1,upper=K> x[N]; // group indicator
   int<lower=0> y[N];              
 }
+
 parameters {
-  real<lower=0> lambda;     
+  real alpha; 
+  real beta;
 }
+
 model {
-  lambda ~ exponential(0.000125); 
-  y ~ poisson(lambda);
+  alpha ~ exponential(0.0006303); //change this
+  beta ~ exponential(1.2); 
+  y ~ neg_binomial(alpha, beta);
 }
+
 generated quantities {
   int<lower=0> y_rep[K]; 
   vector[N] log_lik; 
   
   for (i in 1:N) 
-    log_lik[i] = poisson_lpmf(y[i] | lambda);
+    log_lik[i] = neg_binomial_lpmf(y[i] | alpha, beta);
 
   for (i in 1:K) 
-    y_rep[i] = poisson_rng(lambda); 
+    y_rep[i] = neg_binomial_rng(alpha, beta); 
 }
 "
 
-##########################################################
+#################################################
 
-separate_poisson = "
+
+hierarchical_negative_bin_1 = "
 
 data {
   int<lower=0> N;           // number of data points
@@ -176,40 +183,112 @@ data {
 }
 
 parameters {
-  real<lower=0> lambda[K];
+  real<lower=0> alpha[K]; 
+  real beta;
 }
 
 model {
-  lambda ~ exponential(0.0001260604);
-  y ~ poisson(lambda[x]);
+  alpha ~ exponential(0.0006303); //change this
+  beta ~ exponential(1.2); 
+  y ~ neg_binomial(alpha[x], beta);
 }
 
 generated quantities {
   int<lower=0> y_rep[K]; 
   vector[N] log_lik; 
-
+  
   for (i in 1:N) 
-    log_lik[i] = poisson_lpmf(y[i] | lambda[x[i]]);
+    log_lik[i] = neg_binomial_lpmf(y[i] | alpha[x[i]], beta);
+
   for (i in 1:K) 
-    y_rep[i] = poisson_rng(lambda[i]); 
+    y_rep[i] = neg_binomial_rng(alpha[i], beta); 
 }
 "
+####################################################################
+
+hierarchical_negative_bin_2 = "
+
+data {
+  int<lower=0> N;           // number of data points
+  int<lower=0> K;           // number of groups
+  int<lower=1,upper=K> x[N]; // group indicator
+  int<lower=0> y[N];              
+}
+
+parameters {
+  real alpha;
+  real<lower=0> beta[K]; 
+}
+
+model {
+  alpha ~ exponential(0.0006303); //change this
+  beta ~ exponential(1.2); 
+  y ~ neg_binomial(alpha, beta[x]);
+}
+
+generated quantities {
+  int<lower=0> y_rep[K]; 
+  vector[N] log_lik; 
+  
+  for (i in 1:N) 
+    log_lik[i] = neg_binomial_lpmf(y[i] | alpha, beta[x[i]]);
+
+  for (i in 1:K) 
+    y_rep[i] = neg_binomial_rng(alpha, beta[i]); 
+}
+"
+#####################################################################à
+
+separate_negative_bin = "
+
+data {
+  int<lower=0> N;           // number of data points
+  int<lower=0> K;           // number of groups
+  int<lower=1,upper=K> x[N]; // group indicator
+  int<lower=0> y[N];              
+}
+
+parameters {
+  real<lower=0> alpha[K]; 
+  real<lower=0> beta[K];
+}
+
+model {
+  alpha ~ exponential(0.0006303); //change this
+  beta ~ exponential(1.2); 
+  y ~ neg_binomial(alpha[x], beta[x]);
+}
+
+generated quantities {
+  int<lower=0> y_rep[K]; 
+  vector[N] log_lik; 
+  
+  for (i in 1:N) 
+    log_lik[i] = neg_binomial_lpmf(y[i] | alpha[x[i]], beta[x[i]]);
+
+  for (i in 1:K) 
+    y_rep[i] = neg_binomial_rng(alpha[i], beta[i]); 
+}
+"
+
+
+
 ```
 
 
 ```{r, echo=TRUE, tidy=FALSE}
 # DEFINITION OF THE DATA (a subset of data)
 data = list(
-  N = 3*20,    #N=23*20
-  K = 3,       #K=23
-  x = x[1:60], #x=x
-  y = y[1:60]  #y=y
+  N = 4*20,    #N=23*20
+  K = 4,       #K=23
+  x = x[1:80], #x=x
+  y = y[1:80]  #y=y
 )
 
 
 # FIT OF THE MODEL IN STAN: choose the model to fit!
 fit <- stan(
-  model_code = pooled_poisson,  # Stan program
+  model_code = hierarchical_negative_bin_2,  # Stan program
   data = data,    # named list of data
   chains = 4,     # number of Markov chains
   iter =4000,    # total number of iterations per chain
@@ -233,7 +312,7 @@ loo_model$estimates[1]
 
 ```{r, echo=TRUE, tidy=FALSE}
 S=4000
-n=3*20       #n=20*23
+n=4*20       #n=20*23
 vector=rep(0,n)
 for(i in 1:n)
  vector[i]=log(1/S*(sum(exp(samples$log_lik[,i]))))
