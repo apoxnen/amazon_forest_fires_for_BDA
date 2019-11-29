@@ -139,7 +139,7 @@ for (j in 1:length(states)) {
 }
 ```
 
-# regression model w.r.t the states of Brazil and sum of number of fires per year
+# Pooled regression model w.r.t the states of Brazil and sum of number of fires per year
 
 Neg binomial regression model erikseen hierarkinen ja pooled. Ennustamaan tulipalojen summaa per vuosi per state ttai kk keskiarvoa
 ```{r tidy=FALSE}
@@ -149,10 +149,11 @@ for (i in 2:23) {
 }
 y=as.vector(y)
 
-x = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
-      rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
-      rep(23,20))
-
+# x = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
+#       rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
+#       rep(23,20))
+x = rep(1998:2017, 23)
+xpred = 2018
 N <- length(y)
 xpred <- 24
 data=list(N =N, x=x, y=y, xpred = xpred)
@@ -169,6 +170,7 @@ plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
 
 stan_trace(p, pars=c("ypred"))
 stan_dens(fit1, pars=c("ypred"))
+fit1
 
 draws <- as.data.frame(fit1)
 hist(draws$ypred)
@@ -176,6 +178,19 @@ hist(draws$ypred)
 
 
 
+
+
+
+
+
+
+
+
+
+# Separate regression model
+```{r}
+
+```
 
 
 
@@ -200,14 +215,15 @@ for (i in 2:23) {
 }
 y=as.vector(y)
 
-x = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
+x = rep(1998:2017, 23)
+xx = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
       rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
       rep(23,20))
 
 N <- 460          # N of observations per state
 K <- 23           # N of states
-xpred <- 24
-data=list(N =N, K=K, x=x, y=y, xpred = xpred)
+xpred <- 2018
+data=list(N =N, K=K, x=x, xx=xx, y=y, xpred = xpred)
 fit2 <- stan("regression_hierarchical.stan",
              data = data,
              chains = 4,     # number of Markov chains
@@ -220,15 +236,16 @@ fit2 <- stan("regression_hierarchical.stan",
 ```{r}
 alpha <- as.matrix(fit2)[,1]
 beta <- as.matrix(fit2)[,2]
-plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
-   xlab="Alpha ", ylab="Beta", pch=10)
+#plot(alpha, beta, main="Scatterplot of draws of alpha and beta",
+#   xlab="Alpha ", ylab="Beta", pch=10)
 
-stan_trace(fit2, pars=c("ypred"))
+#stan_trace(fit2, pars=c("ypred"))
 stan_dens(fit2, pars=c("ypred"))
-stan_dens(fit2, pars=c("y_prep"))
 
-pred <- as.data.frame(extract(fit2, "y_prep"))
+pred <- as.data.frame(extract(fit2, "ypred"))
 colMeans(pred)
+colMeans(dataset)
+fit2
 
 #draws <- as.data.frame(fit2)
 #hist(draws$ypred)
