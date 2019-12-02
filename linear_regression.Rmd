@@ -155,7 +155,6 @@ y=as.vector(y)
 x = rep(1998:2017, 23)
 xpred = 2018
 N <- length(y)
-xpred <- 24
 data=list(N =N, x=x, y=y, xpred = xpred)
 fit1 <- stan("regression_pooled.stan", data = data)
 ```
@@ -209,18 +208,21 @@ hist(draws$ypred)
 
 ## Hierarchical Regression model
 ```{r}
-y=dataset[,1]
-for (i in 2:23) {
-  y=cbind(y,dataset[,i])
-}
-y=as.vector(y)
+# y=dataset[,1]
+# for (i in 2:23) {
+#   y=cbind(y,dataset[,i])
+# }
+# y=as.vector(y)
 
-x = rep(1998:2017, 23)
-xx = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
-      rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
-      rep(23,20))
+#x = rep(1998:2017, 23)
+y = t(dataset)
+x = 1998:2017
+# xx = c(rep(1,20), rep(2,20), rep(3,20), rep(4,20),rep(5,20),rep(6,20),rep(7,20),rep(8,20),rep(9,20),rep(10,20),rep(11,20),
+#       rep(12,20),rep(13,20),rep(14,20),rep(15,20),rep(16,20),rep(17,20),rep(18,20),rep(19,20),rep(20,20),rep(21,20),rep(22,20),
+#       rep(23,20))
+xx = 1:20
 
-N <- 460          # N of observations per state
+N <- 20          # N of observations per state
 K <- 23           # N of states
 xpred <- 2018
 data=list(N =N, K=K, x=x, xx=xx, y=y, xpred = xpred)
