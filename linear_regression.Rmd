@@ -248,8 +248,25 @@ fit2
 
 #draws <- as.data.frame(fit2)
 #hist(draws$ypred)
+
+
+# LOO estimates
+loo_regression=loo(fit2)
+plot(loo_regression)
+
+log_lik_h <- extract_log_lik(fit2, merge_chains = FALSE)
+r_eff_h <- relative_eff(exp(log_lik_h))
+loo_h <- loo(log_lik_h, r_eff = r_eff_h, save_psis=TRUE, cores=2 )
+print(loo_h)
+
+
+
 ```
 
+```{r}
+# Save the best model so far to this var:
+fit2_best_so_far <- fit2
+```
 
 
 

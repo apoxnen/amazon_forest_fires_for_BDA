@@ -8,28 +8,30 @@ data {
   real xpred;
 }
 parameters {
-  vector<lower=0>[K] alpha;
-  vector<lower=0>[K] beta;
+  real<lower=0> alpha;
+  real<lower=0> beta;
   real<lower=0> phi;
 }
 model {
-  //alpha ~ normal(0,10);
-  //beta ~ normal(0,10);
-  phi ~ cauchy(0, 3);
+  //phi ~ normal(3000, 6000);
+  phi ~ normal(0,30); // <- so far the best phi dist
   
-  for (i in 1:K) {
-    alpha[i] ~ exponential(0.2); //change this
-    beta[i] ~ exponential(0.2); //change this
-    y ~ neg_binomial_2(alpha[i] + beta[i] * x, phi);
-  }
-  
+  alpha ~ exponential(0.00002); //change this
+  beta ~ exponential(0.00002); //change this
+  y ~ neg_binomial(alpha + beta * x, phi);
 }
 
 generated quantities {
-  int<lower=0> ypred[K]; 
+  int<lower=0> ypred[K];
+  vector[N] log_lik;
+  
   for (i in 1:K) 
-    ypred[i] = neg_binomial_2_rng(alpha[i] + beta[i] * xpred, phi); // Now mu = alpha + beta*x*xpred???
+    ypred[i] = neg_binomial_rng(alpha + beta * xpred, phi); // Now mu = alpha + beta*x*xpred???
+  
+  for (i in 1:N) 
+    log_lik[i] = neg_binomial_lpmf(y[i] | alpha, beta);
 }
+
 
 
 
