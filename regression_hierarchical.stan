@@ -1,41 +1,44 @@
+// USE YEARS AS GROUP INDICATOR!!! NOW x is just a random number!!
+// 1/alpha = K(1-(1/beta)) / (1/beta)
 data {
-  int<lower=0> N;           // number of data points
+  int<lower=0> N;
   int<lower=0> K;           // number of groups
-  vector[N] x;              // group indicator
-  //int<lower=1,upper=K> x[N]; // group indicator
-  int<lower=0> y[N];
+  vector[N] x;        // predictor (year)
+  int<lower=0> y[N];  // response (n of fires)
   real xpred;
 }
-
 parameters {
-  real alpha;
-  real beta;
-  //vector[K] alpha; 
-  //vector[K] beta;
-  real phi;
+  real<lower=0> alpha;
+  real<lower=0> beta;
+  real<lower=0> phi;
 }
-
-transformed parameters {
-  vector[N] mu ;
-  mu = alpha + beta * x ;
-  
-}
-
 model {
-  alpha ~ exponential(0.2); //change this
-  beta ~ exponential(0.2); //change this
-  phi ~ cauchy(0,3);
+  //phi ~ normal(3000, 6000);
+  phi ~ normal(0,30); // <- so far the best phi dist
   
-  
-  
-  y ~ neg_binomial_2(mu, phi);
+  alpha ~ exponential(0.00002); //change this
+  beta ~ exponential(0.00002); //change this
+  y ~ neg_binomial(alpha + beta * x, phi);
 }
 
 generated quantities {
-  int<lower=0> ypred[K]; 
+  int<lower=0> ypred[K];
+  vector[N] log_lik;
+  
   for (i in 1:K) 
-    ypred[i] = neg_binomial_rng(mu[ x[i] ]*xpred, phi); // Now mu = alpha + beta*x*xpred???
+    ypred[i] = neg_binomial_rng(alpha + beta * xpred, phi); // Now mu = alpha + beta*x*xpred???
+  
+  for (i in 1:N) 
+    log_lik[i] = neg_binomial_lpmf(y[i] | alpha, beta);
 }
+
+
+
+
+
+
+
+
 
 
 
