@@ -1,0 +1,36 @@
+---
+title: "BDA - Explorative analysis"
+author: "Alessandra Ragni"
+date: "29 novembre 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, out.width='.49\\linewidth', fig.show='hold', fig.height = 3, fig.width = 3, fig.align="center"}
+library(ggplot2)
+
+x11()
+par(mar=rep(12,4))
+boxplot(dataset[,1:12], las=2, col='red')
+
+vector=colnames(dataset)
+vector[13]="Para"
+colnames(dataset)=vector
+barplot(sapply(dataset,sd)^2, las=2, main='Original Variables', ylab='Variances')
+```
+
+
+
+
+```{r, echo=FALSE, fig.height = 4, fig.width = 6, fig.align="center"}
+# https://datascienceplus.com/how-to-make-seaborn-pairplot-and-heatmap-in-r-write-python-in-r/
+
+```
+
+
+
+
+
