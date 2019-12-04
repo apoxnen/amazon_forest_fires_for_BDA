@@ -29,8 +29,8 @@ data=merge(state,data2, by="name_state")
 
 ggplot() + 
   geom_sf(data=data, aes(fill=values), color= NA, size=.15) + 
-  labs(subtitle="Number of forest fires, mean 1998-2017, Brazilian States", size=8) + 
-  scale_fill_distiller(palette = "Reds", name="Forest Fires", direction=1, limits = c(0,50000)) +
+  labs(subtitle="Mean number of forest fires in Brazil, 1998-2017", size=8) + 
+  scale_fill_distiller(palette = "Reds", name="Number of forest fires", direction=1, limits = c(0,50000)) +
   theme_minimal() +
   no_axis
 

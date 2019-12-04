@@ -180,7 +180,7 @@ parameters {
 }
 
 model {
-  lambda ~ exponential(0.0001260604);
+  lambda ~ exponential(0.002);
   y ~ poisson(lambda[x]);
 }
 
@@ -209,7 +209,7 @@ data = list(
 
 # FIT OF THE MODEL IN STAN: choose the model to fit!
 fit <- stan(
-  model_code = pooled_poisson,  # Stan program
+  model_code = separate_poisson,  # Stan program
   data = data,    # named list of data
   chains = 4,     # number of Markov chains
   iter =4000,    # total number of iterations per chain

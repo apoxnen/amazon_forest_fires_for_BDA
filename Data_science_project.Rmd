@@ -571,7 +571,7 @@ generated quantities {
 
 ```
 
-```{r, echo=TRUE, tidy=FALSE}
+```{r, echo=FALSE, tidy=FALSE}
 # DEFINITION OF THE DATA (a subset of data)
 data = list(
   N = 4*20,    #N=23*20
@@ -591,18 +591,7 @@ separate_neg_binomial_fit <- stan(
   cores = 2       # number of cores (could use one per chain)
 )
 
-```
 
-
-```{r, echo=TRUE, tidy=FALSE}
-S=4000
-n=4*20       #n=20*23
-vector=rep(0,n)
-for(i in 1:n)
- vector[i]=log(1/S*(sum(exp(samples$log_lik[,i]))))
-
-peff = sum(vector) - loo_model$estimates[1]
-peff
 ```
 
 
@@ -731,7 +720,7 @@ model {
   y ~ neg_binomial(alpha + beta * x, phi);
 }
 
-generated_quantities {
+generated quantities {
   int<lower=0> ypred[K];
   vector[N] log_lik;
   
@@ -744,9 +733,10 @@ generated_quantities {
 "
 ```
 
+```{r, echo=FALSE, tidy=FALSE}
 
-```{r, echo=TRUE, tidy=FALSE}
 # DEFINITION OF THE DATA (a subset of data)
+
 data = list(
   N = 4*20,    #N=23*20
   K = 4,       #K=23
@@ -785,6 +775,7 @@ loo_model_h$estimates[1]
 
 
 
+
 ```{r, echo=FALSE}
 ############################################
 dataset2=data.frame("ME" =c(72.036, 68.743),
@@ -801,4 +792,4 @@ knitr::kable(
  * https://datascienceplus.com/bayesian-regression-with-stan-beyond-normality/
  * https://mc-stan.org/docs/2_20/functions-reference/nbalt.html
  * https://mc-stan.org/loo/reference/loo-glossary.html
- * #https://github.com/avehtari/BDA_R_demos/blob/master/demos_rstan/ppc/poisson-simple.stan
+ * https://github.com/avehtari/BDA_R_demos/blob/master/demos_rstan/ppc/poisson-simple.stan
