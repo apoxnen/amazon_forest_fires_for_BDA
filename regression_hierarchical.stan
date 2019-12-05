@@ -3,33 +3,40 @@
 data {
   int<lower=0> N;
   int<lower=0> K;           // number of groups
+  int  xx[N];        // predictor (year)
   vector[N] x;        // predictor (year)
   int<lower=0> y[N];  // response (n of fires)
   real xpred;
 }
 parameters {
-  real<lower=0> alpha;
-  real<lower=0> beta;
-  real<lower=0> phi;
+  vector[K] alpha;
+  vector[K] beta;
+
 }
+
 model {
-  //phi ~ normal(3000, 6000);
-  phi ~ normal(0,30); // <- so far the best phi dist
+  //phi ~ exponential(0.1);
+  alpha ~ normal(0,100);
+  beta ~ normal(0,100);
   
-  alpha ~ exponential(0.00002); //change this
-  beta ~ exponential(0.00002); //change this
-  y ~ neg_binomial(alpha + beta * x, phi);
+  for( i in 1:N) {
+    //mu[i] = exp(alpha[xx[i]] + beta[xx[i]] * x[i]);
+    y[i] ~ poisson_log(alpha[xx[i]] + beta[xx[i]] * x[i]);  
+  }
 }
 
 generated quantities {
   int<lower=0> ypred[K];
   vector[N] log_lik;
-  
-  for (i in 1:K) 
-    ypred[i] = neg_binomial_rng(alpha + beta * xpred, phi); // Now mu = alpha + beta*x*xpred???
+  // posterioir predictive checking here : lightspeed example
+  // use eg. means
+  for (i in 1:K)
+    ypred[i] = poisson_log_rng(alpha[i] + beta[i] * xpred);
+    //ypred[i] = neg_binomial_2_rng(alpha[i] + beta[i] * xpred, phi); // Now mu = alpha + beta*x*xpred???
   
   for (i in 1:N) 
-    log_lik[i] = neg_binomial_lpmf(y[i] | alpha, beta);
+    log_lik[i] = poisson_log_lpmf(y[i] | alpha[xx[i]] + beta[xx[i]]);
+    //log_lik[i] = neg_binomial_lpmf(y[i] | alpha[xx[i]], beta[xx[i]]);
 }
 
 
