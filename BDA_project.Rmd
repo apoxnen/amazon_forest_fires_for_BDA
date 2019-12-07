@@ -150,23 +150,30 @@ matplot(dataset, las=2,type = "l", col="Red", xlab="Years: from 1998 to 2017", y
 #4 Methods
 
 ##4.1 Choice of models
-Because of the hierarchical structure of the data, building a hierarchical model was a natural choice. Since there are massive differences in variance and mean between the states, a pooled model can not perform very well in analyzing a single state. Because of this, we have focused on comparing separate and hierarchical models.
+Because of the hierarchical structure of the dataset, building a hierarchical model was a natural choice. Since there are massive differences in variances and means between the states, a pooled model can not perform very well in analyzing a single state. Separate models however, can perform even better than hierarchical models since the number of states is quite high (23) and not all states are directly related because of the size of the country. Because of this, we have focused on comparing separate and hierarchical models and only included a pooled normal model that we initially implemented.
 
-First, a normal model is introduced, as it is a good basis to build further models on and it provides a good baseline for further results. Because of the aforementioned qualities of the dataset (mean and variance) the next model we built was a negative binomial model, which should fit the dataset better. A separate and hierarchical versions of this model proved to model our data better than their normal counterparts. The last model we included was a regression model that utilizes the negative binomial distribution and predicts the amount of fires for the year 2018 in each of the states.
+First, a normal model is introduced, as it is a good basis to build further models on and it provides a good baseline for further results. Because of the aforementioned qualities of the dataset (mean and variance) the next model we built was a negative binomial model, which should fit the dataset better. A separate and hierarchical versions of this model proved to model our data better than their normal counterparts.
 
-We also experimented with additional models that we decided to leave out because of their poor performance or the lack of sensible results. These models include a poisson model, pooled versions of the used models, and regression models that use a different distribution or alternative parametrizations that stan provides.
+Because of the structure of the data and the results we obtained with the normal and negative binomial models, we build a Poisson model hoping it would fit the data better than the other models. However, we ran to an error with the relative effective sample size estimates for the likelihood (r_eff) that we could not solve even with the help of teaching assistants, and thus we could not properly compare this model to the other models.
+
+A similar scenario occurred with a negative binomial regression model we built. The goal with this model was to use the hierarchical negative binomial model and extend it to handle the yearly data of the fires in each state and make predictions into the future using the available data. With this model as well, we ran into the same problem concerning likelihoods and thus were not able to perform coherent comparison with the working models.
+
+The two models that we could not get working are appended to the end of the models section, but they are not compared with the other models because of the aforementioned reasons.
 
 ##4.2 Choice of priors
-We wanted to capture the large variance in the dataset with our choice of priors. For the normal models we used a prior distribution $\mu_0 ~ N(\mu, \sigma)$, where $\mu$ is the mean of the dataset and $\sigma$ is the variance of the dataset.
+We wanted to capture the large variance in the dataset with our choice of priors. For the normal hierarchical model we used a prior distribution $\mu_0 = N(\mu, \sigma)$, where $\mu$ is the mean of the dataset and $\sigma$ is the variance of the dataset.
 
-For the negative binomial model, as well as the regression model, we used the priors $\alpha u$ and $\beta = 1.2$
+The priors for this model are not optimal, as they come from the data and give the models a "too good" idea on what to expect from the input data. The priors should not come directly from the data, instead they should be more general in order to help the model succeed better with unknown and upcoming data as well, not only the data it is tested with. But in this case with the normal model we decided to stick with these since no matter the priors, the normal models could not perform as well as the negative binomial models.
+
+For the negative binomial model, as well as the regression model, we used the priors $\alpha = Exp(0.0006303)$ and $\beta = Exp(1.2)$. For $\alpha$ we used $1/var(dataset)$ as $\lambda$ for the exponential distribution. The $\lambda$ of $\beta$ was acquired by experimenting with different priors.
 
 ##4.3 Methods for comparing the models
+To compare the models with one another as well as the original data, we used posterior predictive checking. We used the fitted models to simulate new estimates for the number of fires in some states and then compared these draws to the actual data.
 
-
-
+Additionally, we used the fitted models to predict the number of fires in each state for the last year of the dataset (2017) by leaving that year out during the fitting. Then we compared the prediction to the actual data. The plots for these comparisons can be found in section 8.
 
 #5 Definition of the models
+The models built can be found from this section. First the normal models are introduced, after that the negative binomial models and lastly the Poisson and hierarchical regression model are presented, although they can not be compared to the other models.
 
 ##5.1 Normal Models
 The models (Separate, Pooled and Hierarchical) presented in section 5.1 are all based on a normal prior.
@@ -485,13 +492,95 @@ hierarchical_neg_binomial_fit <- stan(
 samples_h_nb = extract(object=hierarchical_neg_binomial_fit, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
 ```
 
-#5.3 Hierarchical Regression Model
-ADD THE CODE
+# 5.3 Hierarchical Poisson Model
+Below is the definition for our Poisson model that we could not get working. The posterior and predictions it produces are reasonable, and the Rhat values are mostly converged, but the k values are out of bounds and $r_{eff}$ contains NA values.
+
+```{r, echo=TRUE, tidy=FALSE}
+ # STAN CODE: DEFINITION OF HIERARCHICAL POISSON MODEL
+poisson_h_model = "
 
 
+data {
+  int<lower=0> N;
+  int<lower=0> K;           // number of groups
+  int  xx[N];        // predictor (year)
+  vector[N] x;        // predictor (year)
+  int<lower=0> y[N];  // response (n of fires)
+}
+parameters {
+  vector[K] alpha;
+}
+
+model {
+  for (i in 1:K) {
+    alpha[i] ~ normal(0,100); // Bad prior    
+  }
+  
+  for( i in 1:N) {
+    y[i] ~ poisson(alpha[xx[i]]);
+  }
+}
+
+generated quantities {
+  int<lower=0> ypred[K];
+  vector[N] log_lik;
+  for (i in 1:K)
+    ypred[i] = poisson_rng(alpha[i]);
+  
+  for (i in 1:N)
+    log_lik[i] = poisson_lpmf(y[i] | alpha[xx[i]]);
+}
+
+"
+```
+
+
+#5.4 Hierarchical Regression Model
+The regression model shares many charasteristics with the Poisson model above. It also provides predictions that make sense for the state in question but once again $r_{eff}$ contains NA values and thus the model can not be compared in a meaningful way.
+
+```{r, echo=TRUE, tidy=FALSE}
+ # STAN CODE: DEFINITION OF HIERARCHICAL REGRESSION MODEL
+regression_model = "
+
+data {
+  int<lower=0> N;     // number of datapoints
+  int<lower=0> K;     // number of groups
+  int  xx[N];        // predictor (year)
+  vector[N] x;        // predictor (year)
+  int<lower=0> y[N];  // response (n of fires)
+  real xpred;         // predictor
+}
+parameters {
+  vector[K] alpha;
+  vector[K] beta;
+  real phi;
+}
+
+model {
+  phi ~ exponential(0.1);
+  alpha ~ normal(0,100);
+  beta ~ normal(0,100);
+  
+  for( i in 1:N) {
+    y[i] ~ neg_binomial_2(alpha[xx[i]] + beta[xx[i]] * x[i], phi);  
+  }
+}
+
+generated quantities {
+  int<lower=0> ypred[K];
+  vector[N] log_lik;
+  for (i in 1:K)
+    ypred[i] = neg_binomial_2_rng(alpha[i] + beta[i] * xpred, phi);
+  
+  for (i in 1:N) 
+    log_lik[i] = poisson_log_lpmf(y[i] | alpha[xx[i]] + beta[xx[i]]);
+}
+
+"
+```
 
 #6 Results
-Here the PSIS-LOO elpd values and the k-values for each of the three normal models introduced in the last section as well as the effective number of parameters Peff for each of the model.
+Here the PSIS-LOO elpd values and the k-values for each of the three normal models and the two negative binomial models introduced in the last section as well as the effective number of parameters Peff for each of the model.
 The values for PSIS_LOO and the peff are displayed under the plot of k-values.
 
 ## SEPARATE NORMAL MODEL
@@ -611,17 +700,12 @@ peff = sum(vector_h_nb) - loo_model_h_nb$estimates[1]
 peff
 ```
 
-## HIERARCHICAL REGRESSION MODEL
-ADD THE CODE
 
+#7 Choosing the best model
+The best model is chosen by how closely the fitted model resembles the actual data and the accuracy of its predictions for individual states, as well as the PSIS_LOO values visible in the previous section. Separate Negative Binomial model is the best one between the first five models. For this model, the fit is done on the years 1998-2016 and then the prediction for the year 2017 is compared to the data.
 
-
-#7 Choiche of the best model
 The best model is chosen according to ...
 Since the models with normal priors are not good the prediction is ....
-
-Separate Negative Binomial model is the best one between the first five models.
-For this model, the fit is done on the years 1998-2016 and then the prediction for the year 2017 is compared to the data.
 
 ```{r, echo=TRUE, tidy=FALSE,echo=FALSE, tidy=FALSE,cache=FALSE, results='hyde', warning=FALSE, comment=FALSE, warning=FALSE, include=FALSE}
 # STAN CODE: SEPARATE NEGATIVE BINOMIAL MODEL
@@ -776,6 +860,7 @@ samples_s_nb3 = extract(object=separate_neg_binomial_fit3, permuted = TRUE, inc_
 ```
 
 #8 Analysis of the results
+In this section we perform comparison between our most accurate model and the original data using the methods described in section 4.3.
 
 ##8.1 Separate Negative binomial model
 
@@ -814,9 +899,11 @@ knitr::include_graphics("Rplot01.jpeg")
 
 
 #9 Discussion of the results, of the problems and potential improvements
+As can be seen from the plots in the previous section, our best model can estimate the number of fires some what accurately, but there are small differences in most of the states. The overalls trends are correct and the distributions for individual states are reasonable and resemble the originals.
 
+The largest problem we faced during this project, as well as the most potential improvement is the Poisson model we could not get working. Because negative binomial has to do with "the number of failures" in an experiment, which is an element that is not present in our dataset since it is impossible to track the fires that did not start, Poisson model has great potential in being able to model the data better. The regression model should also be considered as a potential improvement, and with fine tuned priors it could provide better estimates than our current best model.
 
-
+To conclude, the number of forest fires is not trivial to estimate only by looking at the number of past fires. The phenomena has multiple different factors that should also be incorporated into the predictive models if one wants to perform meaningful analysis. The temperatures, winds and amount of rainfall as well as the local population and legistlation are some of the important factors that have a huge effect on how the number of fires develop over the years. Our model that only analyzes the amount of past fires can provide helpful estimates that are in the right ballpark for the individual states, but more sophisticated analysis is needed to truly be able to provide an accurate estimate.
 
 #10 References
 Dataset:

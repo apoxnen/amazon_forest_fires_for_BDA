@@ -156,9 +156,10 @@ x = rep(1998:2017, 23)
 xpred = 2018
 N <- length(y)
 data=list(N =N, x=x, y=y, xpred = xpred)
+
+
 fit1 <- stan("regression_pooled.stan", data = data)
 ```
-
 
 
 ```{r}
@@ -223,6 +224,8 @@ N <- length(y)          # N of observations per state
 K <- 4           # N of states
 xpred <- 2018
 data=list(N =N, K=K, x=x, xx=xx, y=y, xpred = xpred)
+
+
 fit2 <- stan("regression_hierarchical.stan",
              data = data,
              chains = 4,     # number of Markov chains
@@ -231,6 +234,27 @@ fit2 <- stan("regression_hierarchical.stan",
              cores = 2       # number of cores (could use one per chain)
 )
 ```
+
+
+
+```{r}
+data = list(
+  N = 4*20,
+  K = 4,
+  x = x[1:80],
+  xx =c(rep(1,20), rep(2,20), rep(3,20), rep(4,20)),
+  y = y[1:80]
+)
+fit2 <- stan("poisson.stan", 
+             data = data,
+             chains = 4,     # number of Markov chains
+             iter =4000,    # total number of iterations per chain
+             warmup=3000,
+             cores = 2 
+)
+
+```
+
 
 ```{r}
 alpha <- as.matrix(fit2)[,1]
@@ -255,8 +279,11 @@ loo_regression=loo(fit2)
 plot(loo_regression)
 
 log_lik_h <- extract_log_lik(fit2, merge_chains = FALSE)
+#log_lik_h
 r_eff_h <- relative_eff(exp(log_lik_h))
-loo_h <- loo(log_lik_h, r_eff = r_eff_h, save_psis=TRUE, cores=2 )
+r_eff_h
+#loo_h <- loo(log_lik_h, r_eff = r_eff_h, save_psis=TRUE, cores=2 )
+loo_h <- loo(log_lik_h, save_psis=TRUE, cores=2 )
 print(loo_h)
 
 
