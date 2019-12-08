@@ -785,34 +785,58 @@ In this section we perform comparison between our most accurate model and the or
 
 ##8.1 Separate Negative binomial model
 
-### CONVERGENCE DIAGNOSTIC
-Since the Separate Negative binomal model has different values of alpha and beta for each state, the following analysis of convergence diagnostic is performed just for the first state, Acre.
-```{r, echo=FALSE, tidy=FALSE,cache=FALSE, results='hyde', warning=FALSE, comment=FALSE, warning=FALSE, include=FALSE}
+### SPECIFIC CONVERGENCE DIAGNOSTIC (HMC)
+Since the Separate Negative binomal model has 23 different values both for alpha and beta (one for each state), the following analysis of convergence diagnostic is reported just for the first state, Acre. The procedure and the results are similar for the other 22 states.
+
+First, the diagnostic plots are displayed.
+
+##### Plot of alpha chains for Acre state
+```{r,echo=FALSE, fig.height = 6, fig.width = 8, fig.align="center"}
 Alpha=samples_s_nb1$alpha
 Beta=samples_s_nb1$beta
-#Rhat(Alpha)
-#Rhat(Beta)
 
 #alpha
-matplot(Alpha[1:1000,1],type="line", col="black", xlab="Iteration", ylab="Alpha")
+matplot(Alpha[1:1000,1],type="line", col="yellow", xlab="Iteration", ylab="Alpha")
 lines(Alpha[1001:2000,1], col="red")
 lines(Alpha[2001:3000,1], col="orange")
 lines(Alpha[3001:4000,1], col="blue")
+```
 
-matplot(Beta[1:1000,1],type="line", col="black", xlab="Iteration", ylab="Alpha")
+Alpha chains seem visually convergent.
+
+##### Plot of beta chains for Acre state
+```{r,echo=FALSE, fig.height = 6, fig.width = 8, fig.align="center"}
+matplot(Beta[1:1000,1],type="line", col="yellow", xlab="Iteration", ylab="Beta")
 lines(Beta[1001:2000,1], col="red")
 lines(Beta[2001:3000,1], col="orange")
 lines(Beta[3001:4000,1], col="blue")
 
 ALPHA=cbind(Alpha[1:1000,1],Alpha[1001:2000,1],Alpha[2001:3000,1], Alpha[3001:4000,1])
 BETA=cbind(Beta[1:1000,1], Beta[1001:2000,1], Beta[2001:3000,1], Beta[3001:4000,1])
-Rhat(BETA)
-Rhat(ALPHA)
 ```
 
+Beta chain seem visually convergent.
+
+##### Rhat value for Alpha (Acre state)
+```{r,echo=FALSE, fig.height = 6, fig.width = 8, fig.align="center"}
+Rhat(ALPHA)
+```
+##### Rhat value for Beta (Acre state)
+```{r,echo=FALSE, fig.height = 6, fig.width = 8, fig.align="center"}
+Rhat(BETA)
+```
+
+##### Comments on the values of Rhat
+For the calculation of Rhat, we have used the Rhat function of R.
+$$ \widehat{R} \xrightarrow{\text{N }\rightarrow \infty} 1 $$
+
+This value is an estimate of how much the scale of the elements of ALPHA and BETA matrices (obtained by juxtapose chains for alpha and beta respectively one next to each other) could reduce if N goes to infinity.
+It is also known from theory that if Rhat is big (this means greater than 1.01) it is better to keep sampling.
+In this case the output for the two matrices are lower than 1.01 and close to 1, so it means with high probability that the chains are converging.
+
+### EFFECTIVE SAMPLE SIZE DIAGNOSTIC (ESS)
 The amount by which autocorrelation within the chains increases uncertainty in estimates can be measured by effective sample size (ESS). Given independent samples, the central limit theorem bounds uncertainty in estimates based on the number of samples N. Given dependent samples, the number of independent samples is replaced with the effective sample size  
 Neff, which is the number of independent samples with the same estimation power as the N autocorrelated samples.
-
 
 
 ### POSTERIOR PREDICTIVE CHECKING FOR THE FIRST THREE STATES
