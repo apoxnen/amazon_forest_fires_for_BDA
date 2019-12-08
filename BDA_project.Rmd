@@ -99,7 +99,7 @@ The aim of this project is to analyze the number of fires in the states of Brazi
 #2 Introduction
 The dataset on which the analysis are made is taken from "Kaggle", an online community of data scientists and machine learners where many data sets are available for the users. 
 The "amazon" dataset reports the number of forest fires in Brazil divided by states. The series comprises the period of approximately 10 years (1998 to 2017). The data were obtained from the official website of the Brazilian government.
-Brazil has the largest rainforest on the planet that is the Amazon rainforest. Forest fires are a serious problem for the preservation of the Tropical Forests. Understanding the frequency of forest fires in a time series can help to take action to prevent them. 
+Brazil has the largest rainforest on the planet that is the Amazon rainforest. Fires are a serious problem for the preservation of the Tropical Forests. Understanding the frequency of forest fires in a time series can help to take action to prevent them. 
 
 #3 Explorative Analysis
 
@@ -118,7 +118,7 @@ Separate, Pooled and Hierarchical models will be applied on this dataset.
 The dataset can be visualized in the below map. The intensity of the colour is proportional to the mean number of fires among the years 1998 - 2017, as displayed in the legend on the right.
 
 
-```{r image, echo=FALSE, fig.align="center", out.width='.9\\linewidth'}
+```{r image2, echo=FALSE, fig.align="center", out.width='.9\\linewidth'}
 knitr::include_graphics("Rplot.jpeg")
 #fig.cap="Number of fires - Brazil"
 ```
@@ -150,11 +150,12 @@ matplot(dataset, las=2,type = "l", col="Red", xlab="Years: from 1998 to 2017", y
 #4 Methods
 
 ##4.1 Choice of models
-Because of the hierarchical structure of the dataset, building a hierarchical model was a natural choice. Since there are massive differences in variances and means between the states, a pooled model can not perform very well in analyzing a single state. Separate models however, can perform even better than hierarchical models since the number of states is quite high (23) and not all states are directly related because of the size of the country. Because of this, we have focused on comparing separate and hierarchical models and only included a pooled normal model that we initially implemented.
+Because of the hierarchical structure of the dataset, building a hierarchical model was a natural choice. Since there are massive differences in variances and means between the states, a pooled model can not perform very well in analyzing a single state. Separate models however, can perform even better than hierarchical models since the number of states is quite high (23) and not all states are directly related because of the size of the country. Because of this, we have focused on comparing separate and hierarchical models.
 
-First, a normal model is introduced, as it is a good basis to build further models on and it provides a good baseline for further results. Because of the aforementioned qualities of the dataset (mean and variance) the next model we built was a negative binomial model, which should fit the dataset better. A separate and hierarchical versions of this model proved to model our data better than their normal counterparts.
+First, a normal model is introduced, as it is a good basis to build further models on and it provides a good baseline for further results. Because of the aforementioned qualities of the dataset (mean and variance) the next model we built were a poisson and a negative binomial model, which should fit the dataset better. A separate and hierarchical versions of these models were implemented.
 
-Because of the structure of the data and the results we obtained with the normal and negative binomial models, we build a Poisson model hoping it would fit the data better than the other models. However, we ran to an error with the relative effective sample size estimates for the likelihood (r_eff) that we could not solve even with the help of teaching assistants, and thus we could not properly compare this model to the other models.
+The negative binomial models proved to model our data better than their normal counterparts.
+With the poisson model we ran to an error with the relative effective sample size estimates for the likelihood (r_eff) that we could not solve even with the help of teaching assistants, and thus we could not properly compare this model to the other models.
 
 A similar scenario occurred with a negative binomial regression model we built. The goal with this model was to use the hierarchical negative binomial model and extend it to handle the yearly data of the fires in each state and make predictions into the future using the available data. With this model as well, we ran into the same problem concerning likelihoods and thus were not able to perform coherent comparison with the working models.
 
@@ -165,7 +166,10 @@ We wanted to capture the large variance in the dataset with our choice of priors
 
 The priors for this model are not optimal, as they come from the data and give the models a "too good" idea on what to expect from the input data. The priors should not come directly from the data, instead they should be more general in order to help the model succeed better with unknown and upcoming data as well, not only the data it is tested with. But in this case with the normal model we decided to stick with these since no matter the priors, the normal models could not perform as well as the negative binomial models.
 
-For the negative binomial model, as well as the regression model, we used the priors $\alpha = Exp(0.0006303)$ and $\beta = Exp(1.2)$. For $\alpha$ we used $1/var(dataset)$ as $\lambda$ for the exponential distribution. The $\lambda$ of $\beta$ was acquired by experimenting with different priors.
+For the negative binomial model, as well as the regression model, we used the priors $\alpha = Exp(0.0006303)$ and $\beta = Exp(1.2)$. 
+
+The parameter of the exponential distribution of $\beta$ was acquired by experimenting with different priors.
+The two parameters (of $\alpha$ and $\beta$) are related one to each other and the relationship is found by imposing the mean of a negative binomial equal to the mean of our dataset. 
 
 ##4.3 Methods for comparing the models
 To compare the models with one another as well as the original data, we used posterior predictive checking. We used the fitted models to simulate new estimates for the number of fires in some states and then compared these draws to the actual data.
@@ -176,7 +180,7 @@ Additionally, we used the fitted models to predict the number of fires in each s
 The models built can be found from this section. First the normal models are introduced, after that the negative binomial models and lastly the Poisson and hierarchical regression model are presented, although they can not be compared to the other models.
 
 ##5.1 Normal Models
-The models (Separate, Pooled and Hierarchical) presented in section 5.1 are all based on a normal prior.
+The models (Separate and Hierarchical) presented in section 5.1 are all based on a normal prior.
 
 ##5.1.1 Separate Normal Model
 
@@ -238,61 +242,8 @@ samples_s = extract(object=fit_separate, permuted = TRUE, inc_warmup = FALSE, in
 ```
 
 
-##5.1.2 Pooled Normal Model
 
-$$ y_i \sim N(\mu,\sigma)$$
-
-```{r, echo=TRUE, tidy=FALSE}
-#STAN CODE: POOLED NORMAL MODEL
-pooled_code = "
-
-data {
-  int<lower=0> N;      // number of data points
-  vector[N] y;         
-}
-
-parameters {
-  real mu;             // common mean
-  real<lower=0> sigma; // common std
-}
-
-model {
-  y ~ normal(mu, sigma);
-}
-
-
-generated quantities { 
-  real ypred;
-  vector[N] log_lik;
-  ypred = normal_rng(mu,sigma);
-  for (i in 1:N)
-    log_lik[i] = normal_lpdf(y[i] | mu, sigma);   
-}
-"
-```
-
-```{r, echo=FALSE, tidy=FALSE,cache=FALSE, results='hyde', warning=FALSE, comment=FALSE, warning=FALSE, include=FALSE}
-data_pooled = list(
-  N = 23*20,
-  y = y
-)
-
-# FIT OF THE MODEL IN STAN
-fit_pooled <- stan(
-  model_code = pooled_code,  # Stan program
-  data = data_pooled,    # named list of data
-  chains = 4,     # number of Markov chains
-  iter =4000,    # total number of iterations per chain
-  warmup=3000,
-  cores = 2       # number of cores (could use one per chain)
-)
-
-samples_p = extract(object=fit_pooled, permuted = TRUE, inc_warmup = FALSE, include = TRUE)
-```
-
-
-
-##5.1.3 Hierarchical Normal Model
+##5.1.2 Hierarchical Normal Model
 
 $$ y_{ji} \sim N(\overline{\mu}+\mu_j,\sigma)$$
 
@@ -498,8 +449,6 @@ Below is the definition for our Poisson model that we could not get working. The
 ```{r, echo=TRUE, tidy=FALSE}
  # STAN CODE: DEFINITION OF HIERARCHICAL POISSON MODEL
 poisson_h_model = "
-
-
 data {
   int<lower=0> N;
   int<lower=0> K;           // number of groups
@@ -530,7 +479,6 @@ generated quantities {
   for (i in 1:N)
     log_lik[i] = poisson_lpmf(y[i] | alpha[xx[i]]);
 }
-
 "
 ```
 
@@ -575,12 +523,11 @@ generated quantities {
   for (i in 1:N) 
     log_lik[i] = poisson_log_lpmf(y[i] | alpha[xx[i]] + beta[xx[i]]);
 }
-
 "
 ```
 
 #6 Results
-Here the PSIS-LOO elpd values and the k-values for each of the three normal models and the two negative binomial models introduced in the last section as well as the effective number of parameters Peff for each of the model.
+Here the PSIS-LOO elpd values and the k-values for each of the two normal models and the two negative binomial models introduced in the last section as well as the effective number of parameters Peff for each of the model.
 The values for PSIS_LOO and the peff are displayed under the plot of k-values.
 
 ## SEPARATE NORMAL MODEL
@@ -603,30 +550,6 @@ for(i in 1:n)
  vector_s[i]=log(1/S*(sum(exp(samples_s$log_lik[,i]))))
 
 peff = sum(vector_s) - loo_s$estimates[1] 
-peff
-```
-
-
-## POOLED NORMAL MODEL
-```{r, echo=FALSE, tidy=FALSE, warning=FALSE}
-loo_pooled=loo(fit_pooled)
-log_lik_p <- extract_log_lik(fit_pooled, merge_chains = FALSE)
-r_eff_p <- relative_eff(exp(log_lik_p))
-loo_p <- loo(log_lik_p, r_eff = r_eff_p, save_psis=TRUE, cores=2 )
-print(loo_p)
-plot(loo_pooled)
-
-PSIS_LOO=loo_p$estimates[1]
-PSIS_LOO
-
-S=4000
-n=20*23
-
-vector_p=rep(0,n)
-for(i in 1:n)
- vector_p[i]=log(1/S*(sum(exp(samples_p$log_lik[,i]))))
-
-peff = sum(vector_p) - loo_p$estimates[1] 
 peff
 ```
 
@@ -682,7 +605,7 @@ peff
 # Hierarchical Model
 log_lik_h_nb <- extract_log_lik(hierarchical_neg_binomial_fit, merge_chains = FALSE)
 r_eff_h_nb <- relative_eff(exp(log_lik_h_nb))
-loo_model_h_nb <- loo(log_lik_h, r_eff = r_eff_h_nb, save_psis=TRUE, cores=2 )
+loo_model_h_nb <- loo(log_lik_h_nb, r_eff = r_eff_h_nb, save_psis=TRUE, cores=2 )
 print(loo_model_h_nb)
 plot(loo_model_h_nb)
 
@@ -702,10 +625,7 @@ peff
 
 
 #7 Choosing the best model
-The best model is chosen by how closely the fitted model resembles the actual data and the accuracy of its predictions for individual states, as well as the PSIS_LOO values visible in the previous section. Separate Negative Binomial model is the best one between the first five models. For this model, the fit is done on the years 1998-2016 and then the prediction for the year 2017 is compared to the data.
-
-The best model is chosen according to ...
-Since the models with normal priors are not good the prediction is ....
+The best model is chosen by how closely the fitted model resembles the actual data and the accuracy of its predictions for individual states, as well as the PSIS_LOO values visible in the previous section. Separate Negative Binomial model is the best one between the first four models. For this model, the fit is done on the years 1998-2016 and then the prediction for the year 2017 is compared to the data.
 
 ```{r, echo=TRUE, tidy=FALSE,echo=FALSE, tidy=FALSE,cache=FALSE, results='hyde', warning=FALSE, comment=FALSE, warning=FALSE, include=FALSE}
 # STAN CODE: SEPARATE NEGATIVE BINOMIAL MODEL
@@ -891,7 +811,7 @@ abline(v=mean(dataset[,3]), col="red")
 ```
 
 ### COMPARISON BETWEEN PREDICTION AND REAL DATA (2017)
-```{r image, echo=FALSE, fig.align="center", out.width='.49\\linewidth', fig.show='hold'}
+```{r, echo=FALSE,out.width='.49\\linewidth', fig.height = 5, fig.width = 5, fig.align="center"}
 knitr::include_graphics("Rplot_2017.jpeg")
 knitr::include_graphics("Rplot01.jpeg")
 #fig.cap="Number of fires - Brazil"
@@ -901,7 +821,9 @@ knitr::include_graphics("Rplot01.jpeg")
 #9 Discussion of the results, of the problems and potential improvements
 As can be seen from the plots in the previous section, our best model can estimate the number of fires some what accurately, but there are small differences in most of the states. The overalls trends are correct and the distributions for individual states are reasonable and resemble the originals.
 
-The largest problem we faced during this project, as well as the most potential improvement is the Poisson model we could not get working. Because negative binomial has to do with "the number of failures" in an experiment, which is an element that is not present in our dataset since it is impossible to track the fires that did not start, Poisson model has great potential in being able to model the data better. The regression model should also be considered as a potential improvement, and with fine tuned priors it could provide better estimates than our current best model.
+The largest problem we faced during this project, as well as the most potential improvement is the Poisson model we could not get working. Because negative binomial has to do with "the number of failures" in an experiment, which is an element that is not present in our dataset since it is impossible to track the fires that did not develop, Poisson model has great potential in being able to model the data better. The regression model should also be considered as a potential improvement, and with fine tuned priors it could provide better estimates than our current best model.
+
+Moreover, the original dataset presents the distribution of the forest fires among the months and the exact day of the fire. This information about the time series are not taken into account in the above proposed model, but should be included for a more sophisticated analysis.
 
 To conclude, the number of forest fires is not trivial to estimate only by looking at the number of past fires. The phenomena has multiple different factors that should also be incorporated into the predictive models if one wants to perform meaningful analysis. The temperatures, winds and amount of rainfall as well as the local population and legistlation are some of the important factors that have a huge effect on how the number of fires develop over the years. Our model that only analyzes the amount of past fires can provide helpful estimates that are in the right ballpark for the individual states, but more sophisticated analysis is needed to truly be able to provide an accurate estimate.
 
